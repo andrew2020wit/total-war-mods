@@ -2,6 +2,8 @@
 
 ## Armageddon
 
+[https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
+
 "Armageddon" modification increases difficulty for the game, especially for the middle and late game.
 
 AI gets bonuses, but only if it has the different culture than the player.
