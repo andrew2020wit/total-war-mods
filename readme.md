@@ -70,6 +70,8 @@ You can turn off this mod for some turns, if it becomes too hard.
 
 ## General Logger
 
+https://steamcommunity.com/sharedfiles/filedetails/?id=3665837500
+
 Mod "General Logger" creates '!!af_global_logger.csv' in the game folder.
 
 You can open it as a table with LibreOffice (separator: tab).
