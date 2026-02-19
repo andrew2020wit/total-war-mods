@@ -1,6 +1,6 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 
-local mod_version = '4.0.1'
+local mod_version = '4.0.2'
 
 local settings = {
     enable_logging = false,
@@ -414,9 +414,9 @@ local function help_ai_each_turn(context)
     if current_faction:is_human() then
         log('settings, current_turn:' .. current_turn ..
          ', regions_gold_bonus_percent: ' .. settings.regions_percent ..
-         ', time_gold_bonus_percent: ' .. settings.time_percent
-         ', add_chevron_each_turn: ' .. settings.add_chevron_each_turn
-         .. ', character exp: ' .. settings.experience_for_character
+         ', time_gold_bonus_percent: ' .. settings.time_percent ..
+         ', add_chevron_each_turn: ' .. settings.add_chevron_each_turn ..
+         ', character exp: ' .. settings.experience_for_character
         )
 
         return
