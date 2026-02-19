@@ -1,6 +1,6 @@
 # My modifications for the game Total War Warhammer 3
 
-## Armageddon
+## AF Armageddon v4.
 
 [https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
 
@@ -8,17 +8,21 @@
 
 AI gets bonuses, but only if it has the different culture than the player.
 
+It also changes balance between factions.
+
 ### Unit experience
 
-Each unit each turn is given one chevron (after 9 turns => 3 gold chevrons). Including garrisons.
+Each unit each second turn is given one chevron (after 18 turns => 3 gold chevrons from zero). Including garrisons.
+
+add_chevron_each_turn = 2, -- each second turn
 
 ### Characters experience
 
 Each character each turn is given experience:
 
-experience = (experience_for_character = 200) * turn_number
+experience = (experience_for_character = 100) * turn_number
 
-(So at 10 turn each character is given 2000 exp)
+(So at 10 turn each character is given 1000 exp)
 
 ### Gold bonus
 
@@ -61,6 +65,12 @@ Change it and "save PackFile"
 See "Rusted PackFile Manager" documentation about how to use it.
 
 https://github.com/Frodo45127/rpfm
+
+### Skip culture/faction
+
+At the beginning lua script in setting object you can set true to skip some culture/faction from getting bonuses.
+
+This is very powerful way to change balance and game experience.
 
 ### About balance
 
