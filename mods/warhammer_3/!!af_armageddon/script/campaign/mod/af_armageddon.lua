@@ -1,6 +1,6 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 
-local mod_version = '4.0.2'
+local mod_version = '4.0.3'
 
 local settings = {
     enable_logging = false,
@@ -10,30 +10,30 @@ local settings = {
     experience_for_character = 100,
     add_chevron_each_turn = 2, -- each second turn
     skip_culture = {
+        wh_main_emp_empire = false,
+        wh_main_brt_bretonnia = false,
+        wh_main_dwf_dwarfs = false,
         wh3_main_ksl_kislev = false,
+        wh3_main_cth_cathay = false,
+        wh2_main_hef_high_elves = false,
+        wh_dlc05_wef_wood_elves = false,
+        wh_main_chs_chaos = false, -- chaos
         wh3_main_dae_daemons = false,
         wh3_main_kho_khorne = false,
         wh3_main_nur_nurgle = false,
         wh3_main_sla_slaanesh = false,
         wh3_main_tze_tzeentch = false,
-        wh3_main_ogr_ogre_kingdoms = false,
+        wh_dlc08_nor_norsca = false,
+        wh_dlc03_bst_beastmen = false,
         wh3_dlc23_chd_chaos_dwarfs = false,
-        wh3_main_cth_cathay = false,
-        wh2_main_hef_high_elves = false,
-        wh2_main_lzd_lizardmen = false,
-        wh2_main_def_dark_elves = false,
+        wh2_main_def_dark_elves = false, -- dark_elves
         wh2_main_skv_skaven = false,
         wh2_dlc09_tmb_tomb_kings = false,
-        wh2_dlc11_cst_vampire_coast = false,
-        wh_main_emp_empire = false,
-        wh_main_dwf_dwarfs = false,
-        wh_main_grn_greenskins = false,
         wh_main_vmp_vampire_counts = false,
-        wh_main_chs_chaos = false,
-        wh_dlc03_bst_beastmen = false,
-        wh_dlc05_wef_wood_elves = false,
-        wh_main_brt_bretonnia = false,
-        wh_dlc08_nor_norsca = false,
+        wh2_dlc11_cst_vampire_coast = false,
+        wh3_main_ogr_ogre_kingdoms = false,
+        wh2_main_lzd_lizardmen = false,
+        wh_main_grn_greenskins = false,
         wh2_main_rogue = false,
         rebels = true,
     },
