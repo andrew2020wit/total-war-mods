@@ -1,12 +1,12 @@
 # My modifications for the game Total War Warhammer 3
 
-## AF Armageddon v4.
+## AF Armageddon v5.
 
 [https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
 
 "Armageddon" modification increases difficulty for the game, especially for the middle and late game.
 
-AI gets bonuses, but only if it has the different culture than the player.
+AI gets bonuses, but only if it has the different culture group than the player.
 
 It also changes balance between factions.
 
@@ -44,6 +44,51 @@ bonus = (4 (regions_percent) * 10 (regions) /100 + 20 (turn) * 2 (time_percent) 
 
 AI not always can utilize all money, so a lot of money not always means a lot of armies.
 
+### Culture groups
+
+```lua
+    
+local culture_groups = {
+    {
+        "wh_main_emp_empire",
+        "wh_main_brt_bretonnia",
+        "wh_main_dwf_dwarfs",
+        "wh3_main_ksl_kislev",
+        "wh3_main_cth_cathay",
+        "wh2_main_hef_high_elves",
+        "wh_dlc05_wef_wood_elves",
+    },
+    {
+        "wh_main_chs_chaos",
+        "wh_main_chs_chaos",
+        "wh3_main_dae_daemons",
+        "wh3_main_kho_khorne",
+        "wh3_main_nur_nurgle",
+        "wh3_main_sla_slaanesh",
+        "wh3_main_tze_tzeentch",
+        "wh_dlc08_nor_norsca",
+        "wh_dlc03_bst_beastmen",
+        "wh3_dlc23_chd_chaos_dwarfs",
+        "wh2_main_def_dark_elves",
+        "wh2_main_skv_skaven",
+    },
+    {
+        "wh2_dlc09_tmb_tomb_kings",
+        "wh_main_vmp_vampire_counts",
+        "wh2_dlc11_cst_vampire_coast",
+    },
+    {
+        "wh3_main_ogr_ogre_kingdoms",
+    },
+    {
+        "wh2_main_lzd_lizardmen",
+    },
+    {
+        "wh_main_grn_greenskins",
+    }
+}
+```
+
 ### Compatibility
 
 It was created to be used with Radious mod, but it's also compatible with any other mod.
@@ -65,12 +110,6 @@ Change it and "save PackFile"
 See "Rusted PackFile Manager" documentation about how to use it.
 
 https://github.com/Frodo45127/rpfm
-
-### Skip culture/faction
-
-At the beginning lua script in setting object you can set true to skip some culture/faction from getting bonuses.
-
-This is very powerful way to change balance and game experience.
 
 ### About balance
 
