@@ -1,6 +1,6 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 
-local mod_version = '5.0.6'
+local mod_version = '5.0.7'
 
 local settings = {
     enable_logging = false,
@@ -21,7 +21,6 @@ local culture_groups = {
         "wh_dlc05_wef_wood_elves",
     },
     {
-        "wh_main_chs_chaos",
         "wh_main_chs_chaos",
         "wh3_main_dae_daemons",
         "wh3_main_kho_khorne",

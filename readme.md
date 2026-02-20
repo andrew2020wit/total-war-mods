@@ -60,7 +60,6 @@ local culture_groups = {
     },
     {
         "wh_main_chs_chaos",
-        "wh_main_chs_chaos",
         "wh3_main_dae_daemons",
         "wh3_main_kho_khorne",
         "wh3_main_nur_nurgle",
