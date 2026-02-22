@@ -1,12 +1,12 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 
-local mod_version = '5.0.7'
+local mod_version = '5.0.8'
 
 local settings = {
     enable_logging = false,
     regions_percent = 4,
     time_percent = 2,
-    experience_for_character = 100,
+    experience_for_character = 200,
     add_chevron_each_turn = 2, -- each second turn
 }
 

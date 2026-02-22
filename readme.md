@@ -148,6 +148,24 @@ faction_counter (all faction number),
 
 You can use it to judge about AI doing.
 
+## Turn crash debug logger
+
+Some time you can get a repeated crash during AI turns.
+
+It creates the log file '!af_turn_crash_debug_logger.csv' in the game folder,
+with different information to hint about what could cause that crash.
+
+Then you can kill faction or character via "Modding Development Tools: Lua Console"
+https://steamcommunity.com/sharedfiles/filedetails/?id=2791799449
+
+
+```lua
+    cm:kill_all_armies_for_faction(faction_key)
+    
+    cm:kill_character(cqi, true)
+```
+
+
 ## License
 
 These mods are under MIT license, you are free to use them as you want.
