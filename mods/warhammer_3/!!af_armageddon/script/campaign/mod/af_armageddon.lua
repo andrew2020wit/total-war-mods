@@ -1,6 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
+-- af_armageddon
 
-local mod_version = '5.0.8'
+local mod_version = '6.0.7'
 
 local settings = {
     enable_logging = false,
@@ -9,6 +10,16 @@ local settings = {
     experience_for_character = 200,
     add_chevron_each_turn = 2, -- each second turn
 }
+
+local effect_bundles = {
+    "af_armageddon_effect_bundle_ai_buff_5",
+    "af_armageddon_effect_bundle_ai_buff_4",
+    "af_armageddon_effect_bundle_ai_buff_3",
+    "af_armageddon_effect_bundle_ai_buff_2",
+    "af_armageddon_effect_bundle_ai_buff_1",
+}
+
+local effect_bundles_turns = { 50 , 40, 30, 20, 10 }
 
 local culture_groups = {
     {
@@ -99,6 +110,41 @@ end
 
 log('Armageddon start! ' .. os.date() .. ' v. ' .. mod_version)
 
+local function get_current_bundle_key(turn)
+    for i = 1, #effect_bundles_turns do
+        --log_errors(tostring(turn).." turn => " .. tostring(i) .. ' -- ' .. tostring(#effect_bundles_turns))
+        if turn >= effect_bundles_turns[i] then
+            return effect_bundles[i]
+        end 
+    end
+
+    return nil
+end    
+
+local function remove_all_effect_bundles(faction_name)
+    local faction = cm:get_faction(faction_name)
+
+    for i = 1, #effect_bundles do
+        if  faction:has_effect_bundle(effect_bundles[i]) then
+            cm:remove_effect_bundle(effect_bundles[i], faction_name)            
+        end 
+    end
+end
+
+local function set_effect_bundle(faction_name)
+    local current_bundle_key = get_current_bundle_key(cm:turn_number())
+
+    if not current_bundle_key then
+        --log_errors('f not current_bundle_key then')
+
+        return
+    end
+
+    remove_all_effect_bundles(faction_name)
+
+    cm:apply_effect_bundle(current_bundle_key, faction_name, 2)
+end
+
 local function add_xp_to_army(faction_name)
     local faction = cm:get_faction(faction_name)
     local force_list = faction:military_force_list()
@@ -176,6 +222,8 @@ local function help_ai_each_turn(context)
             ', character exp: ' .. settings.experience_for_character
         )
 
+        -- set_effect_bundle(current_faction_name) -- test, set for player_faction
+
         return
     end
 
@@ -232,6 +280,8 @@ local function help_ai_each_turn(context)
     else
         log('skip add_xp_to_army for this turn')
     end
+
+    set_effect_bundle(current_faction_name)
 end
 
 core:add_listener(
@@ -241,6 +291,8 @@ core:add_listener(
     help_ai_each_turn,
     true
 )
+
+-- test ========================================
 
 local function test_culture_group(culture_a, culture_b, true_result)
     local same = the_same_culture_group(culture_a, culture_b)
@@ -256,11 +308,21 @@ local function test_culture_group(culture_a, culture_b, true_result)
     log_errors(result .. ' test_culture_group: ' .. culture_a .. ', ' .. culture_b .. ', result: ' .. tostring(same))
 end
 
-local function test()
+local function test_culture()
     log_errors('Test, v' .. mod_version)
     test_culture_group("wh_main_chs_chaos", "wh3_main_kho_khorne", true)
     test_culture_group("wh2_main_hef_high_elves", "wh2_dlc09_tmb_tomb_kings", false)
     test_culture_group("wh3_main_ogr_ogre_kingdoms", "wh3_main_ogr_ogre_kingdoms", true)
 end
 
---test()
+local function test()
+    log_errors('Test, v' .. mod_version)
+    log_errors('Effect Bonus bundle, 40 turn: ' .. tostring(get_current_bundle_key(40)))
+    log_errors('Effect Bonus bundle, 39 turn: ' .. tostring(get_current_bundle_key(39)))
+    log_errors('Effect Bonus bundle, 41 turn: ' .. tostring(get_current_bundle_key(41)))
+    log_errors('Effect Bonus bundle, 20 turn: ' .. tostring(get_current_bundle_key(20)))
+    log_errors('Effect Bonus bundle, 8 turn: ' .. tostring(get_current_bundle_key(8)))
+    log_errors('Effect Bonus bundle, 10 turn: ' .. tostring(get_current_bundle_key(10)))
+end
+
+-- test()

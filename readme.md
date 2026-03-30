@@ -1,6 +1,6 @@
 # My modifications for the game Total War Warhammer 3
 
-## AF Armageddon v5.
+## AF Armageddon v6.
 
 [https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
 
@@ -43,6 +43,15 @@ For example, turn 20, Player has 10 regions, AI has 10000 income
 bonus = (4 (regions_percent) * 10 (regions) /100 + 20 (turn) * 2 (time_percent) /100) * 10000 (AI income) = 8000
 
 AI not always can utilize all money, so a lot of money not always means a lot of armies.
+
+### Effect bundles
+
+There are effect bundles, which add some additional bonuses.
+
+From 10 to 50 turns bonuses are increasing:
+
+1. local unit_recruitment_points are increased by 2-10 slots (10 additional local recruitment slots from 50 turn)
+2. technology_research_points are increased by 50-200 points (200 points from 50 turn)
 
 ### Culture groups
 
@@ -107,6 +116,11 @@ Settings at the beginning of the lua file.
 Change it and "save PackFile"
 
 See "Rusted PackFile Manager" documentation about how to use it.
+
+Effect bundles:
+
+lua script: effect_bundles_turns = { 50 , 40, 30, 20, 10 } -- turns to activate bundle
+db folders - effect values
 
 https://github.com/Frodo45127/rpfm
 
