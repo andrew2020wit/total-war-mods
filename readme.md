@@ -101,7 +101,7 @@ local culture_groups = {
 
 It was created to be used with Radious mod, but it's also compatible with any other mod.
 Mod order doesn't matter.
-You can add/remove it during a campaign.
+You can add it during a campaign. Don't remove it then.
 
 ### Recommendations
 
@@ -128,7 +128,6 @@ https://github.com/Frodo45127/rpfm
 
 Balance depends on many things: mods, factions, random events, player skills/style.
 The only thing which you can expect that this mod gradually increases difficulty at some degree.
-You can turn off this mod for some turns, if it becomes too hard.
 
 ## General Logger
 
