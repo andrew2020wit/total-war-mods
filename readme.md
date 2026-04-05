@@ -1,6 +1,6 @@
 # My modifications for the game Total War Warhammer 3
 
-## AF Armageddon v6.
+## AF Armageddon v6.2.1
 
 [https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
 
@@ -52,6 +52,7 @@ From 10 to 50 turns bonuses are increasing:
 
 1. local unit_recruitment_points are increased by 2-10 slots (10 additional local recruitment slots from 50 turn)
 2. technology_research_points are increased by 50-200 points (200 points from 50 turn)
+3. growth - 20-100
 
 ### Culture groups
 

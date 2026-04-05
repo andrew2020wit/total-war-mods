@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '6.0.7'
+local mod_version = '6.2.1'
 
 local settings = {
     enable_logging = false,
