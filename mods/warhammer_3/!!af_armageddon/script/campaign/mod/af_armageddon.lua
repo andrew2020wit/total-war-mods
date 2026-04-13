@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '6.2.1'
+local mod_version = '6.2.2'
 
 local settings = {
     enable_logging = false,
@@ -48,6 +48,7 @@ local culture_groups = {
         "wh2_dlc09_tmb_tomb_kings",
         "wh_main_vmp_vampire_counts",
         "wh2_dlc11_cst_vampire_coast",
+        "mixer_nag_nagash"
     },
     {
         "wh3_main_ogr_ogre_kingdoms",
