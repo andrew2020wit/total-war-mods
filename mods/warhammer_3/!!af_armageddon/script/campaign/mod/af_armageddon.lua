@@ -1,14 +1,19 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '6.2.2'
+local mod_version = '6.3.1'
+
+-- xp_bonus = cm:turn_number() * settings.experience_for_character
+-- gold_bonus = (region_multiplier + time_multiplier) * ai_income;
+-- local time_multiplier = settings.time_percent * current_turn / 100
+-- local region_multiplier = settings.regions_percent * player_regions_number / 100
 
 local settings = {
     enable_logging = false,
     regions_percent = 4,
     time_percent = 2,
     experience_for_character = 200,
-    add_chevron_each_turn = 2, -- each second turn
+    add_chevron_each_turn = 3,
 }
 
 local effect_bundles = {
@@ -19,7 +24,8 @@ local effect_bundles = {
     "af_armageddon_effect_bundle_ai_buff_1",
 }
 
-local effect_bundles_turns = { 50 , 40, 30, 20, 10 }
+-- 40 day - apply_effect_bundle bundle_ai_buff_5
+local effect_bundles_turns = { 40 , 35, 30, 20, 10 }
 
 local culture_groups = {
     {
