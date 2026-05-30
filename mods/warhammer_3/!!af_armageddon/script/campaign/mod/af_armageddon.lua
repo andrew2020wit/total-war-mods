@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '6.3.1'
+local mod_version = '8.0.1'
 
 -- xp_bonus = cm:turn_number() * settings.experience_for_character
 -- gold_bonus = (region_multiplier + time_multiplier) * ai_income;
@@ -9,11 +9,10 @@ local mod_version = '6.3.1'
 -- local region_multiplier = settings.regions_percent * player_regions_number / 100
 
 local settings = {
-    enable_logging = false,
+    enable_logging = true,
     regions_percent = 4,
     time_percent = 2,
-    experience_for_character = 200,
-    add_chevron_each_turn = 3,
+    experience_for_character = 200
 }
 
 local effect_bundles = {
@@ -119,7 +118,6 @@ log('Armageddon start! ' .. os.date() .. ' v. ' .. mod_version)
 
 local function get_current_bundle_key(turn)
     for i = 1, #effect_bundles_turns do
-        --log_errors(tostring(turn).." turn => " .. tostring(i) .. ' -- ' .. tostring(#effect_bundles_turns))
         if turn >= effect_bundles_turns[i] then
             return effect_bundles[i]
         end 
@@ -142,8 +140,6 @@ local function set_effect_bundle(faction_name)
     local current_bundle_key = get_current_bundle_key(cm:turn_number())
 
     if not current_bundle_key then
-        --log_errors('f not current_bundle_key then')
-
         return
     end
 
@@ -153,6 +149,17 @@ local function set_effect_bundle(faction_name)
 end
 
 local function add_xp_to_army(faction_name)
+    local current_turn =  cm:turn_number()
+
+    if current_turn < 10 then
+        return
+    end
+
+    if current_turn < 30 and current_turn % 2 == 0 then
+        return        
+    end
+
+
     local faction = cm:get_faction(faction_name)
     local force_list = faction:military_force_list()
 
@@ -217,20 +224,10 @@ local function help_ai_each_turn(context)
     local current_turn = cm:turn_number()
 
     if (current_faction:is_rebel()) then
-        log('skip rebel')
         return
     end
 
     if current_faction:is_human() then
-        log('settings, current_turn:' .. current_turn ..
-            ', regions_gold_bonus_percent: ' .. settings.regions_percent ..
-            ', time_gold_bonus_percent: ' .. settings.time_percent ..
-            ', add_chevron_each_turn: ' .. settings.add_chevron_each_turn ..
-            ', character exp: ' .. settings.experience_for_character
-        )
-
-        -- set_effect_bundle(current_faction_name) -- test, set for player_faction
-
         return
     end
 
@@ -240,15 +237,11 @@ local function help_ai_each_turn(context)
     local current_culture = current_faction:culture()
     local player_culture = player_faction:culture()
 
-    log('faction: ' .. current_faction_name .. ', culture: ' .. current_culture)
-
     if (current_culture == player_culture) then
-        log('the same culture, skip')
         return
     end
 
     if (the_same_culture_group(current_culture, player_culture)) then
-        log('the_same_culture_group, skip')
         return
     end
 
@@ -282,11 +275,7 @@ local function help_ai_each_turn(context)
 
     add_xp_to_characters(current_faction_name)
 
-    if current_turn % settings.add_chevron_each_turn == 0 then
-        add_xp_to_army(current_faction_name)
-    else
-        log('skip add_xp_to_army for this turn')
-    end
+    add_xp_to_army(current_faction_name)
 
     set_effect_bundle(current_faction_name)
 end
