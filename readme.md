@@ -14,10 +14,6 @@ It was created to be used with Radious mod, but it's also compatible with any ot
 Mod order doesn't matter.
 You can add it during a campaign. Don't remove it then.
 
-### Recommendations
-
-I recommend using it with Radious mod.
-
 ### About balance
 
 Balance depends on many things: mods, factions, random events, player skills/style.
