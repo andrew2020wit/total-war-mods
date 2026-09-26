@@ -1,12 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '8.0.1'
-
--- xp_bonus = cm:turn_number() * settings.experience_for_character
--- gold_bonus = (region_multiplier + time_multiplier) * ai_income;
--- local time_multiplier = settings.time_percent * current_turn / 100
--- local region_multiplier = settings.regions_percent * player_regions_number / 100
+local mod_version = '9.0.1'
 
 local settings = {
     enable_logging = true,
@@ -32,7 +27,10 @@ local culture_groups = {
         "wh_main_brt_bretonnia",
         "wh_main_dwf_dwarfs",
         "wh3_main_ksl_kislev",
+        "wh3_main_pro_ksl_kislev",
         "wh3_main_cth_cathay",
+    },
+    {
         "wh2_main_hef_high_elves",
         "wh_dlc05_wef_wood_elves",
     },
@@ -44,16 +42,22 @@ local culture_groups = {
         "wh3_main_sla_slaanesh",
         "wh3_main_tze_tzeentch",
         "wh_dlc08_nor_norsca",
-        "wh_dlc03_bst_beastmen",
+        "wh_dlc03_bst_beastmen",        
+    },
+    {
         "wh3_dlc23_chd_chaos_dwarfs",
-        "wh2_main_def_dark_elves",
-        "wh2_main_skv_skaven",
+    },
+    {
+        "wh2_main_def_dark_elves"
+    },
+    {
+        "wh2_main_skv_skaven"
     },
     {
         "wh2_dlc09_tmb_tomb_kings",
         "wh_main_vmp_vampire_counts",
         "wh2_dlc11_cst_vampire_coast",
-        "mixer_nag_nagash"
+        "wh3_dlc29_nag_undead_legions",
     },
     {
         "wh3_main_ogr_ogre_kingdoms",

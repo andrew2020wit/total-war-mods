@@ -3,3 +3,5 @@
 .luarc.json
 .git
 /temp
+/private-agent.md
+/.mcp.json

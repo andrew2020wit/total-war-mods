@@ -1,6 +1,6 @@
 # My modifications for the game Total War Warhammer 3
 
-## AF Armageddon v8.0.1
+## AF Armageddon
 
 [https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094)
 
