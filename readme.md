@@ -19,6 +19,10 @@ You can add it during a campaign. Don't remove it then.
 Balance depends on many things: mods, factions, random events, player skills/style.
 The only thing which you can expect that this mod gradually increases difficulty at some degree.
 
+### see also
+
+[af_armageddon-agent.md](./af_armageddon-agent.md)
+
 ## General Logger
 
 https://steamcommunity.com/sharedfiles/filedetails/?id=3665837500
