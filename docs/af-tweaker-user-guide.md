@@ -13,10 +13,11 @@ Each of these can be turned on or off.
 
 1. Subscribe to [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
    (MCT). It provides the settings window. Without it the mod still works with the default
-   settings, but you can't change them, and automatic skills stay off.
+   settings, but you can't change them.
 2. Enable AF Tweaker and MCT in the launcher. The order of the mods doesn't matter.
 
-The mod keeps nothing in your saves, so you can add it to a running campaign.
+The mod keeps nothing in your saves, so you can add it to a running campaign. Automatic skills
+are on by default, so read [the note about them](#automatic-character-skills) first.
 
 ## Settings
 
@@ -30,7 +31,7 @@ The version of the mod is shown in its title.
 | Upgrade buildings at the start of the turn | On | Queues building upgrades |
 | Minimum treasury | 5000 | The money the mod never spends on buildings |
 | Build favorite buildings at the start of the turn | On | Builds your favorite buildings |
-| Spend skill points at the start of the turn | **Off** | Spends skill points and shows the priority stars |
+| Spend skill points at the start of the turn | On | Spends skill points and shows the priority stars |
 | Write a log file | Off | Writes a log, useful for finding problems |
 
 The settings are the same for all your campaigns. A change takes effect from your next turn,
@@ -54,12 +55,12 @@ A building is left alone when:
 - it's already being built or upgraded;
 - the upgrade needs a technology or a higher settlement level;
 - the upgrade costs something other than gold that you can't pay;
-- the upgrade needs a development point and the province has none. Only one such building is
-  queued per province per turn;
+- the upgrade needs a development point and the province has none;
 - it can be upgraded in several different ways. This choice is yours, so make it yourself.
 
-Buildings that cost a pooled resource, such as the raw materials of the Chaos Dwarfs, are queued
-one per turn.
+Buildings that cost development points or a pooled resource, such as the raw materials of the
+Chaos Dwarfs, are queued one at a time, because the mod waits to see what's left after each of
+them. With many such buildings this can take a few seconds at the start of your turn.
 
 ## Favorite buildings
 
@@ -83,9 +84,9 @@ demolish button. The star lights up. Click it again to remove the building from 
 
 ![Priority stars in the skill tree](../imgs/tweaker/skills.png)
 
-This feature is off by default. When it's on, your characters spend all their available skill
-points at the start of your turn. Points go one at a time, so with many unspent points it can
-take a few seconds. Let it finish before you open a character's skill panel.
+This feature is on by default: your characters spend all their available skill points at the
+start of your turn. Points go one at a time, so with many unspent points it can take a few
+seconds. Let it finish before you open a character's skill panel.
 
 Each skill card in the character panel gets a small star above it. Click it to set a priority:
 
@@ -106,16 +107,17 @@ skills without a priority, in the order of the skill tree.
   priority. Points go to whatever can be bought now.
 - A skill unlocked by a point gets its share of the remaining points in the same turn, and a
   skill locked by a point is skipped.
+- If the game refuses a point, the mod moves on to the next skill.
 - Wounded characters are skipped.
 - Keep the game's own automatic level-up (auto-management of skills) off for the characters
   you want this feature to handle. The game spends the points at the end of your turn, before
   this feature gets to them at the start of the next one, so your priorities are never used.
 
-> **Before your next turn:** the stars appear only while this option is on, and the points are
-> spent at the start of your next turn. So turn the option on, set the priorities for your
-> important characters in the same turn, make a save, and only then end the turn. Every
-> character will spend all their unspent points, including on skills without a priority. The
-> only way to undo a choice is the game's skill reset.
+> **Before your first turn with the mod:** the points are spent at the start of your next turn.
+> When you add the mod to a running campaign, set the priorities for your important characters
+> first, make a save, and only then end the turn. Every character will spend all their unspent
+> points, including on skills without a priority. The only way to undo a choice is the game's
+> skill reset. If you don't want this, turn the option off before you end the turn.
 
 ## Compatibility with other mods
 

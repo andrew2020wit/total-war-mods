@@ -34,8 +34,14 @@ The button:
   whole UI, but version 0.3.2 with that call crashed the game seconds after a click on a
   settlement, with no Lua error and a native stack, and no vanilla script uses it.
 - Don't keep a uicomponent between timer ticks: the game may have destroyed it by then. Every
-  poll finds everything anew. An error stops only the step that failed, the star or the skill
-  buttons, and goes to the error log.
+  poll finds everything anew. An error goes to the error log. After `ui_poll_max_failures`
+  errors only the step that failed stops, the star or the skill buttons, because a single one
+  can come from the UI being rebuilt.
+- The polls run all the time, so they start from `settlement_panel` and
+  `character_details_panel`, direct children of the root (`root > settlement_panel >
+  settlement_list`, `root > character_details_panel > ... > character_details_panel_skills` in
+  the `[ui]` lines of the script log). `find_child_uicomponent` looks only at the children of
+  the root, while `Find` would walk the whole UI each time to learn that a panel is closed.
 - The popup comes from the `mouseover` property of `settlement_building_slot`
   (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's looked up by
   name with the recursive `Find`, inside the slot first and then in the whole UI. Don't use a
@@ -43,7 +49,8 @@ The button:
   following it silently finds nothing.
 - The popup opens some time after the mouse enters, so polls before that find nothing and
   simply wait for the next one.
-- With `favorite_buildings_enabled` off the polling does nothing and the button isn't shown.
+- With `favorite_buildings_enabled` off the button isn't added, and one that's already in a
+  popup is hidden when the popup is polled. Clicks are ignored.
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
@@ -74,18 +81,27 @@ The list:
   the same blind spot: if the game refuses such a command, the budget of that cycle is
   simply reduced by a building that wasn't built.
 - Development points and pooled resources have the same blind spot, and only gold is counted
-  in the script. So a cycle queues one building with a development point cost per province
-  and one building with a pooled resource cost per faction (555 vanilla levels, the raw
-  materials of the Chaos Dwarfs first of all). The rest wait for the next turn. The check for a
-  pooled cost comes from `dlc29_vmp_vampire_lair_popup.twui.xml`:
+  in the script. So the cycle goes in rounds, `round_delay` (0.5 s) apart. A round queues one
+  building with a development point cost per province and one building with a pooled resource
+  cost per faction (555 vanilla levels, the raw materials of the Chaos Dwarfs first of all).
+  What didn't fit waits for the next round, which reads what the game has left. Everything
+  else is queued in the first round. The check for a pooled cost comes from
+  `dlc29_vmp_vampire_lair_popup.twui.xml`:
   `IsContextValid(cost) && cost.PooledResourceTransactionList.IsEmpty == false`.
+- While a favorite waits for a round, upgrades wait too, so they can't take its money, and the
+  slot stays reserved for it instead of going to the next favorite.
+- A slot gets one command per cycle (`queued_slots`). So a game slower than a round can't get
+  the same command twice, and a refused command can't repeat. It also means the rounds end:
+  a building waits only because another one was queued in that round.
+- The costs are read before the command: after it a level expression through an empty slot may
+  no longer resolve.
 
 ### Automatic character skills
 
-Off by default. At the start of the player's turn, after the buildings, each character with
-unspent points gets them spent. Skills go by priority, higher first, and in the order of the
-skill tree for equal priorities; skills without a priority go last, so no point stays unspent
-while something can be bought.
+On by default. At the start of the player's turn, after the first building round, each
+character with unspent points gets them spent. Skills go by priority, higher first, and in
+the order of the skill tree for equal priorities; skills without a priority go last, so no
+point stays unspent while something can be bought.
 
 - `CcoCampaignCharacter` gives `SkillPointsAvailable` and `SkillList`. A skill can take a
   point when its `Status` is `active`, it isn't a background skill, `Level < TotalLevels`
@@ -99,15 +115,18 @@ while something can be bought.
 - A point is added with `AddPoint` on the skill and applied with `CommitSkillChoices` on the
   character: the same steps as clicking a card and closing the panel, so the game charges
   the points. Don't use `cm:force_add_skill`: nothing confirms that it charges them.
-- Points go in rounds: one point and one commit per character, then `skill_round_delay`
+- Points go in rounds: one point and one commit per character, then `round_delay`
   (0.5 s) before the next round. Commands are asynchronous, so several points in one commit
   would be chosen from stale data. Skills lock each other a lot
   (`character_skill_nodes_skill_locks` has 2694 vanilla rows), no CCO function shows these
   locks, and the rank of a later level would go unchecked. The next round reads `Status`,
   `Level` and `NextLevelContext` after the commit, so all of this comes from the game itself.
-- A character whose `SkillPointsAvailable` didn't go down between rounds drops out until the
-  next turn, with `skill point not charged` in the log. So a refused command can't loop, and a
-  slow commit can't lead to a choice from stale data.
+- A character whose `SkillPointsAvailable` didn't go down waits up to `skill_commit_rounds`
+  more rounds, so a slow commit can't lead to a choice from stale data. After that the skill
+  counts as refused until the next turn, with `skill point not charged` in the log, and the
+  character goes on with the next skill. A skill the game refuses can't block the other ones,
+  and refused commands can't loop, as each one leaves one skill fewer to try. The counters in
+  the log come from the points that really went down.
 - The rounds stop when the turn ends (`is_factions_turn`). The rest of the points wait for the
   next turn.
 - Locked skills are just skipped, points aren't saved for them, and their parents aren't
@@ -117,11 +136,12 @@ while something can be bought.
   on such characters, so the user guide says to keep it off. Wounded characters are skipped.
 
 The priority button:
-- With the feature on, the poll finds the visible `character_details_panel_skills` and walks
-  `list_box` down to the components named `card`. The real path, from the `[ui]` lines of the
-  script log, is `list_box > chain1 > chain > module_<key> > <skill key> > card`, deeper than
-  the layout file suggests. The parent of a card is named after the skill, which gives the key.
-- Every poll compares the icon with the priority of the skill.
+- The poll finds the visible `character_details_panel_skills` and walks `list_box` down to the
+  components named `card`. The real path, from the `[ui]` lines of the script log, is
+  `list_box > chain1 > chain > module_<key> > <skill key> > card`, deeper than the layout file
+  suggests. The parent of a card is named after the skill, which gives the key.
+- Every poll compares the icon with the priority of the skill. With `auto_skills_enabled` off
+  it hides the buttons instead, and clicks are ignored.
 - Each card gets one button that cycles none, 1, 2, 3, none. It's
   `ui/templates/round_extra_small_button` with all images but the icon replaced by a
   transparent one. It's docked to the top left corner of the card with a fixed offset, because
@@ -147,15 +167,17 @@ A building is skipped when:
 - the slot is empty, already constructing, or is a lifecycle building;
 - the upgrade is locked by a technology or by the settlement level;
 - its non-gold resource cost can't be paid;
-- it needs development points the region doesn't have, or its province already got such a
-  building this cycle;
-- it has a pooled resource cost and another such building was queued this cycle;
+- it needs development points the region doesn't have;
 - it has several upgrades inside its chain. That's the player's choice, so it's logged and
   left alone. Upgrades that lead into another chain (for example Cathay's yin/yang pairs)
   are ignored, and the building stays on its current chain.
 
+Upgrades with a development point or pooled resource cost go in rounds, like favorites: see
+[Favorite buildings](#favorite-buildings).
+
 Single-player only: the UI context objects used here aren't synchronized in multiplayer, so
-the feature does nothing when `cm:is_multiplayer()` is true.
+the feature does nothing when `cm:is_multiplayer()` is true, and the UI polling that shows
+the buttons doesn't start.
 
 ## Settings
 
@@ -169,7 +191,7 @@ defaults from the `settings` table in the script.
 | `auto_upgrade_enabled` | checkbox | `true`  | Turns the automatic upgrades on             |
 | `min_treasury`         | slider   | `5000`  | Money the mod never touches                 |
 | `favorite_buildings_enabled` | checkbox | `true` | Builds favorite buildings; the list itself comes from the star button |
-| `auto_skills_enabled`  | checkbox | `false` | Spends skill points and shows the priority buttons |
+| `auto_skills_enabled`  | checkbox | `true`  | Spends skill points and shows the priority buttons |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -235,16 +257,21 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 | Auto skills: `Status` values                                         | Read from the log of 0.4.3     |
 | Auto skills: `AddPoint`, `CommitSkillChoices`, priorities            | Work in 0.4.4: 78 points on 22 characters in one cycle, confirmed by the user in the game |
-| Auto skills in rounds: the commit is done within `skill_round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
-| One building per cycle for development points and pooled resources   | **Not tested in the game** (0.4.5) |
+| Auto skills in rounds: the commit is done within `round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
+| Auto skills: moving on to the next skill after a refused point       | **Not tested in the game** (0.5.0) |
+| Building rounds for development points and pooled resources          | **Not tested in the game** (0.5.0) |
 | Star button: the context of `options_list` is the slot               | **Not tested in the game** (0.4.5), the button works as before if there's no context |
+| Panels as direct children of the root                                | Read from the `[ui]` lines of the script log; polling through them is **not tested in the game** (0.5.0) |
+| Hiding the buttons when an option is turned off                      | **Not tested in the game** (0.5.0) |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
-queue on the map; with 0.4.5, check that no `skill point not charged` lines appear for
-characters with several points, and that a pair of locked skills gets only one point.
+queue on the map; check that both kinds of stars still appear (0.5.0 finds them another way);
+check that no `skill point not charged` lines appear for characters with several points, and
+that a pair of locked skills gets only one point; with a faction that uses pooled resources,
+check that several such buildings are queued in one turn.
 
 ## Repository layout
 
