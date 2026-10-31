@@ -36,6 +36,7 @@ etc.) so that, for example, a Khorne player doesn't get bonuses against Tzeentch
 mods/warhammer_3/!!af_armageddon/
   script/campaign/mod/af_armageddon.lua   <- the entire mod logic (only source file)
 mods/warhammer_3/!!af_armageddon.pack     <- packed, distributable mod (built with RPFM)
+tests/af-armageddon/model_test.lua        <- tests of the script, see "Tests" below
 af_armageddon-agent.md                    <- this file (lives at repo root, see agent.md's rule on mods/)
 ```
 
@@ -95,6 +96,22 @@ edited since.)
   before packing/releasing.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
+
+## Tests
+
+`tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
+For now it covers the unit XP: when it's added and which units and factions get it. It runs
+the real script against a small model of the game and changes the `settings` in the text of
+the script, because they're a local table. It doesn't talk to the real game, so what the game
+itself answers still needs a run in the game. Run it after changing the script, and extend it
+with the change.
+
+It needs any Lua 5.4. The one inside the VS Code Lua extension will do. Run it from the
+repository root, it prints `ALL PASSED` at the end:
+
+```bash
+"$(ls ~/.vscode/extensions/sumneko.lua-*/server/bin/lua-language-server.exe | tail -1)" "$(pwd -W)/tests/af-armageddon/model_test.lua"
+```
 
 ## Related mods in this repo
 
