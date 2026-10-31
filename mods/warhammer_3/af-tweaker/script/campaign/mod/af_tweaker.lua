@@ -1,43 +1,19 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.1.0'
+local mod_version = '0.1.1'
 
 local mct_mod_key = 'af_tweaker'
 
--- auto_upgrade_enabled and min_treasury are defaults, used when MCT is not installed
+-- enable_logging, auto_upgrade_enabled and min_treasury are defaults, used when MCT is not installed
 local settings = {
-    enable_logging = true,
+    enable_logging = false,
     auto_upgrade_enabled = true,
     min_treasury = 5000,
     turn_start_delay = 0.5
 }
 
 local settlement_context = 'CcoCampaignSettlement'
-
-local function log(text)
-    if not settings.enable_logging then
-        return
-    end
-
-    local file = io.open('!!af_tweaker.txt', "a")
-
-    if not file then return end
-
-    file:write(tostring(text) .. "\n")
-    file:close()
-end
-
-local function log_errors(text)
-    local file = io.open('!!af_tweaker-errors.txt', "a")
-
-    if not file then return end
-
-    file:write(tostring(text) .. "\n")
-    file:close()
-end
-
-log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -65,6 +41,28 @@ local function get_setting(option_key)
     end
 
     return value
+end
+
+local function log(text)
+    if not get_setting('enable_logging') then
+        return
+    end
+
+    local file = io.open('!!af_tweaker.txt', "a")
+
+    if not file then return end
+
+    file:write(tostring(text) .. "\n")
+    file:close()
+end
+
+local function log_errors(text)
+    local file = io.open('!!af_tweaker-errors.txt', "a")
+
+    if not file then return end
+
+    file:write(tostring(text) .. "\n")
+    file:close()
 end
 
 -- All expressions are evaluated on the settlement context, so `this` is the settlement.
@@ -141,9 +139,9 @@ local function is_level_available(region, region_cqi, slot_index, level_key)
     return true
 end
 
-local function upgrade_slot(region, region_cqi, slot_index, budget)
+local function upgrade_slot(region, region_cqi, slot_index, cycle)
     if not is_slot_ready(region_cqi, slot_index) then
-        return budget
+        return
     end
 
     local level_key = get_value(region_cqi,
@@ -152,17 +150,17 @@ local function upgrade_slot(region, region_cqi, slot_index, budget)
 
     if not level_key then
         log_errors('Building key not found, region: ' .. region:name() .. ', slot: ' .. slot_index)
-        return budget
+        return
     end
 
     local upgrade_key = find_upgrade_key(level_key)
 
     if not upgrade_key then
-        return budget
+        return
     end
 
     if not is_level_available(region, region_cqi, slot_index, upgrade_key) then
-        return budget
+        return
     end
 
     local level = level_expression(slot_index, upgrade_key)
@@ -170,27 +168,31 @@ local function upgrade_slot(region, region_cqi, slot_index, budget)
 
     if not cost then
         log_errors('Building cost not found: ' .. upgrade_key)
-        return budget
+        return
     end
 
-    if cost > budget then
-        return budget
+    if cost > cycle.budget then
+        return
     end
 
     common.call_context_command(settlement_context, region_cqi,
         level .. '.IssueCommandForBuildingBrowser(' .. slot_expression(slot_index) .. ')'
     )
 
-    log('upgrade ' .. level_key .. ' => ' .. upgrade_key .. ', region: ' .. region:name()
-        .. ', cost: ' .. tostring(cost) .. ', budget: ' .. tostring(budget) .. ' => ' .. tostring(budget - cost)
-    )
+    local budget_before = cycle.budget
 
-    return budget - cost
+    cycle.budget = budget_before - cost
+    cycle.spent = cycle.spent + cost
+    cycle.upgraded = cycle.upgraded + 1
+
+    log('upgrade ' .. level_key .. ' => ' .. upgrade_key .. ', region: ' .. region:name()
+        .. ', cost: ' .. tostring(cost) .. ', budget: ' .. tostring(budget_before) .. ' => ' .. tostring(cycle.budget)
+    )
 end
 
-local function upgrade_region(region, budget)
+local function upgrade_region(region, cycle)
     if region:garrison_residence():is_under_siege() then
-        return budget
+        return
     end
 
     local region_cqi = region:cqi()
@@ -198,18 +200,16 @@ local function upgrade_region(region, budget)
 
     if not slot_number then
         log_errors('Slot list not found, region: ' .. region:name())
-        return budget
+        return
     end
 
     for slot_index = 0, slot_number - 1 do
-        if budget <= 0 then
+        if cycle.budget <= 0 then
             break
         end
 
-        budget = upgrade_slot(region, region_cqi, slot_index, budget)
+        upgrade_slot(region, region_cqi, slot_index, cycle)
     end
-
-    return budget
 end
 
 -- The treasury is read once: commands are asynchronous, it doesn't change during this loop.
@@ -218,24 +218,27 @@ local function upgrade_buildings(faction_name)
     local min_treasury = get_setting('min_treasury')
     local treasury = faction:treasury()
     local budget = treasury - min_treasury
+    local cycle = { budget = budget, spent = 0, upgraded = 0 }
 
     log('auto upgrade, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
         .. ', min_treasury: ' .. tostring(min_treasury) .. ', budget: ' .. tostring(budget)
     )
 
-    if budget <= 0 then
-        return
-    end
-
     local region_list = faction:region_list()
 
     for i = 0, region_list:num_items() - 1 do
-        if budget <= 0 then
+        if cycle.budget <= 0 then
             break
         end
 
-        budget = upgrade_region(region_list:item_at(i), budget)
+        upgrade_region(region_list:item_at(i), cycle)
     end
+
+    log('auto upgrade done, budget at start: ' .. tostring(budget)
+        .. ', buildings upgraded: ' .. tostring(cycle.upgraded)
+        .. ', total spent: ' .. tostring(cycle.spent)
+        .. ', budget at end: ' .. tostring(cycle.budget)
+    )
 end
 
 local function on_player_turn_start(context)
@@ -258,6 +261,11 @@ local function on_player_turn_start(context)
         end
     end, settings.turn_start_delay)
 end
+
+-- The first tick is the earliest moment when the MCT settings are certainly loaded
+cm:add_first_tick_callback(function()
+    log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
+end)
 
 core:add_listener(
     "AfTweakerAutoUpgrade",

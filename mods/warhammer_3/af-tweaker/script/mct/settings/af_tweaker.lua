@@ -23,3 +23,10 @@ min_treasury:set_tooltip_text("Automatic upgrades only spend the money above thi
 min_treasury:slider_set_min_max(0, 200000)
 min_treasury:slider_set_step_size(1000)
 min_treasury:set_default_value(5000)
+
+mct_mod:add_new_section("debug", "Debug")
+
+local logging = mct_mod:add_new_option("enable_logging", "checkbox")
+logging:set_text("Write a log file")
+logging:set_tooltip_text("Writes !!af_tweaker.txt to the game folder. Errors are always written to !!af_tweaker-errors.txt.")
+logging:set_default_value(false)

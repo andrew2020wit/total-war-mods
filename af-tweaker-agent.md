@@ -3,8 +3,8 @@
 Source code for the **"AF Tweaker"** mod for *Total War: Warhammer 3*: a collection of small
 campaign tweaks, each switched on and tuned from a settings window.
 
-Not published on the Steam Workshop yet. **Not tested in the game yet** — see
-[Verification status](#verification-status) before relying on the behaviour described here.
+Not published on the Steam Workshop yet. First in-game run was on 2026-10-31 — see
+[Verification status](#verification-status) for what it did and didn't confirm.
 
 ## What the mod does
 
@@ -19,6 +19,8 @@ spending only the money above a minimum the player sets:
    upgrade and subtract the cost from the budget; if not, move on to the next building (a
    cheaper one may still fit).
 4. Stop when the budget runs out.
+5. Log the result of the cycle: the budget at the start, the number of buildings upgraded,
+   the total spent and the budget at the end.
 
 The budget is tracked in the script because commands are asynchronous: `faction:treasury()`
 doesn't change during the loop, so re-reading it would overspend.
@@ -47,10 +49,17 @@ defaults from the `settings` table in the script.
 |------------------------|----------|--------:|---------------------------------------------|
 | `auto_upgrade_enabled` | checkbox | `true`  | Turns the automatic upgrades on             |
 | `min_treasury`         | slider   | `5000`  | Money that automatic upgrades never touch   |
+| `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
-Values are read at the start of each turn through `get_finalized_setting()`, so a change
-applies from the next turn. Keep the defaults in the MCT file and in the `settings` table of
-the script in sync.
+Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
+in memory as soon as they're saved in its window. So a change made during the player's turn
+applies from the next turn: this turn's cycle has already run. `enable_logging` is checked
+on every log line.
+
+The options aren't marked global, so MCT stores values changed inside a campaign for that
+campaign. Values set in the main menu are what new campaigns start with.
+
+Keep the defaults in the MCT file and in the `settings` table of the script in sync.
 
 ## Compatibility with other mods
 
@@ -87,14 +96,13 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | What                                                                 | Status                         |
 |----------------------------------------------------------------------|--------------------------------|
 | Radious cost changes, upgrade tables                                 | Read from the packs            |
-| CCO function names                                                   | Found in the vanilla UI files  |
-| Calling those expressions from Lua, `At()` being zero-based          | **Not tested in the game**     |
-| `IssueCommandForBuildingBrowser` called outside a click              | **Not tested in the game**     |
-| Region cqi as the `CcoCampaignSettlement` id                         | Matches vanilla scripts, **not tested** |
-| The `0.5` s delay after `FactionTurnStart`                           | **Not tested in the game**     |
+| Region cqi as the `CcoCampaignSettlement` id, reading slots, keys and costs from Lua | Works: 21 upgrades logged on turn 45 of a Vampire Counts campaign |
+| The `0.5` s delay after `FactionTurnStart`                           | Works in that run              |
+| `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
+| Settings window, `enable_logging`                                    | **Not tested in the game**     |
 
-First in-game check: load a campaign with a surplus of money, end a turn, then compare
-`!!af_tweaker.txt` with the queue on the map and the treasury change.
+Next in-game check: compare the `total spent` of the cycle with the treasury change and the
+queue on the map.
 
 ## Repository layout
 
@@ -118,8 +126,10 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
 
 ## Conventions / gotchas
 
-- Logs are written to the game folder: `!!af_tweaker.txt` (gated by
-  `settings.enable_logging`) and `!!af_tweaker-errors.txt` (always written).
+- Logs are written to the game folder: `!!af_tweaker.txt` (gated by the `enable_logging`
+  option, off by default) and `!!af_tweaker-errors.txt` (always written).
+- The start line of the log is written on the first tick, not at load time: the MCT settings
+  may not be loaded yet when the script file runs.
 - A new tweak gets its own section in the MCT file with an on/off option, and its own
   section in this guide.
 - `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
