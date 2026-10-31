@@ -35,8 +35,8 @@ local function apply_settings(source, settings)
 end
 
 -- world: { settings, last_turn, ai_culture, player_culture, rank, no_general, null_unit }
--- Returns what the AI got: xp_turns (one entry per unit), gold_count, bundles (key by turn)
--- and active_bundles, plus the error log in errors.
+-- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
+-- bundles (key by turn) and active_bundles, plus the error log in errors.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -45,6 +45,7 @@ local function play(world)
     local turn = 0
     local turn_listener
     local xp_turns = {}
+    local character_xp = {}
     local gold_count = 0
     local bundles, active_bundles = {}, {}
     local env = setmetatable({}, { __index = _G })
@@ -68,6 +69,10 @@ local function play(world)
         has_general = function() return not world.no_general end,
         unit_list = function() return list({ unit }) end
     }
+    local character = {
+        rank = function() return 1 end,
+        character_subtype_key = function() return 'character' end
+    }
     local ai = {
         name = function() return 'ai' end,
         is_rebel = function() return false end,
@@ -76,7 +81,7 @@ local function play(world)
         income = function() return 1000 end,
         treasury = function() return 0 end,
         military_force_list = function() return list({ force }) end,
-        character_list = function() return list({}) end,
+        character_list = function() return list({ character }) end,
         has_effect_bundle = function(_, key) return active_bundles[key] == true end
     }
     local player = {
@@ -94,7 +99,11 @@ local function play(world)
             active_bundles[key] = true
         end,
         remove_effect_bundle = function(_, key) active_bundles[key] = nil end,
-        add_experience_to_unit = function() xp_turns[#xp_turns + 1] = turn end
+        add_experience_to_unit = function() xp_turns[#xp_turns + 1] = turn end,
+        char_lookup_str = function() return 'character_lookup' end,
+        add_agent_experience = function(_, _, amount)
+            character_xp[#character_xp + 1] = turn .. ':' .. amount
+        end
     }
     env.core = {
         add_listener = function(_, _, event, _, handler)
@@ -112,6 +121,7 @@ local function play(world)
 
     return {
         xp_turns = table.concat(xp_turns, ','),
+        character_xp = table.concat(character_xp, ','),
         gold_count = gold_count,
         bundles = bundles,
         active_bundles = active_bundles,
@@ -122,6 +132,12 @@ end
 local function check_turns(name, world, expected)
     local result = play(world)
     check(name, result.xp_turns == expected, result.xp_turns)
+    check(name .. ': no errors', result.errors == '', result.errors)
+end
+
+local function check_character_xp(name, world, expected)
+    local result = play(world)
+    check(name, result.character_xp == expected, result.character_xp)
     check(name .. ': no errors', result.errors == '', result.errors)
 end
 
@@ -169,6 +185,25 @@ check_turns('no experience for the culture group of the player', {
     last_turn = 12,
     ai_culture = 'wh_main_dwf_dwarfs'
 }, '')
+
+print('-- character experience')
+
+check_character_xp('by default: every turn from turn 1, scaled by the turn', { last_turn = 3 }, '1:200,2:400,3:600')
+
+check_character_xp('a changed start turn', {
+    settings = { character_experience_start_turn = 5 },
+    last_turn = 6
+}, '5:1000,6:1200')
+
+check_character_xp('it does not depend on the start turn of the units', {
+    settings = { army_experience_start_turn = 3 },
+    last_turn = 2
+}, '1:200,2:400')
+
+check_turns('the units do not depend on the start turn of the characters', {
+    settings = { character_experience_start_turn = 20 },
+    last_turn = 11
+}, '10,11')
 
 print('-- culture groups')
 

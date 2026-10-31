@@ -18,7 +18,8 @@ Bonuses applied per eligible AI faction turn:
   turn number and by the player's region count (see `settings.time_percent` /
   `settings.regions_percent`).
 - **Character XP** — added to every character in the faction, scaled by turn number
-  (`settings.experience_for_character`).
+  (`settings.experience_for_character`), starting from turn
+  `settings.character_experience_start_turn`.
 - **Unit XP** — +1 experience level per unit in armies that have a general, starting from
   turn `settings.army_experience_start_turn`, on every n-th turn
   (`settings.army_experience_turn_interval`: 1 — every turn, 3 — turns 3, 6, 9...).
@@ -96,8 +97,8 @@ edited since.)
 ## Tests
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
-It covers the unit XP (when it's added and which units and factions get it), the culture
-groups and the effect bundle of each turn. It runs the real script against a small model of
+It covers the unit XP (when it's added and which units and factions get it), the character
+XP, the culture groups and the effect bundle of each turn. It runs the real script against a small model of
 the game and changes the `settings` in the text of the script, because they're a local table.
 The local functions of the script aren't reachable, so it checks what they lead to: the calls
 to the game. It doesn't talk to the real game, so what the game itself answers still needs a

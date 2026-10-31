@@ -8,6 +8,7 @@ local settings = {
     regions_percent = 4,
     time_percent = 2,
     experience_for_character = 200,
+    character_experience_start_turn = 10,
     army_experience_start_turn = 10,
     -- 1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...)
     army_experience_turn_interval = 1
@@ -201,8 +202,14 @@ local function add_xp_to_army(faction_name)
 end
 
 local function add_xp_to_characters(faction_name)
+    local current_turn = cm:turn_number()
+
+    if current_turn < settings.character_experience_start_turn then
+        return
+    end
+
     local faction = cm:get_faction(faction_name)
-    local xp_bonus = cm:turn_number() * settings.experience_for_character
+    local xp_bonus = current_turn * settings.experience_for_character
 
     local characters = faction:character_list()
 
