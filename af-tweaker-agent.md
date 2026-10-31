@@ -19,13 +19,31 @@ doesn't change during the loop, so re-reading it would overspend.
 
 ### Favorite buildings
 
-The player lists building keys in the settings. For each free slot of each settlement, the
-mod takes the first listed building that can be built there and that fits the budget.
+The player marks a building with a star button in the popup of its slot. For each free slot
+of each settlement, the mod takes the first favorite that can be built there and that fits
+the budget.
 
-- The keys are building level keys and must be the level that can be built from an empty
-  slot, normally `_1` (`wh_main_vmp_cemetary_1`, not `wh_main_vmp_cemetary_3`). Later levels
-  are the job of the upgrades.
-- Commas, semicolons and spaces all separate keys. Unknown keys are logged and ignored.
+The button:
+- `ComponentMouseOn` on `square_building_button` finds the slot component by walking up to
+  the parent named `CcoCampaignBuildingSlot<id>`. Each slot has its own popup.
+- The button is created with `core:get_or_create_component` from
+  `ui/templates/round_small_button_toggle` in `building_construction_popup > popup_holder >
+  popup_panel > building_tree_holder > options_parent > options_buttons > options_list`,
+  next to the demolish button. The popup can appear after the mouse event, so finding the
+  list is retried on a real-time timer. No vanilla UI file is replaced.
+- It's added only for the player's own buildings. The game hides `options_parent` when
+  `CanShowOptionsPopup` is false, and the button goes with it.
+- The icon is the vanilla `icon_reputation_star_gold.png`, on image index 0 of the template.
+- The building browser has a separate `options_list`, which doesn't get the button.
+
+The list:
+- A favorite is stored as the first level of the chain, whichever level the player clicked,
+  because that's what an empty slot can build. Later levels are the job of the upgrades.
+- It's kept in `!!af_tweaker-favorites.txt` in the game folder, one key per line, in the order
+  of adding, which is also the build priority. The file doesn't depend on a campaign, a save
+  or MCT, and can be edited by hand. It's read when the script loads, written on each click.
+- Keys the current game doesn't know, from a mod that's off for example, are logged and
+  ignored but stay in the file. Keys of other factions are simply never buildable.
 - Which building can go where is decided with the same checks as the construction popup:
   `PossibleBuildingChainsList`, `IsActiveForBuildingBrowser`, `DoesBuildingExceedCap`,
   `IsEpisodicRestricted`, `BuildingCanEverBeBuilt`.
@@ -81,7 +99,7 @@ defaults from the `settings` table in the script.
 |------------------------|----------|--------:|---------------------------------------------|
 | `auto_upgrade_enabled` | checkbox | `true`  | Turns the automatic upgrades on             |
 | `min_treasury`         | slider   | `5000`  | Money the mod never touches                 |
-| `favorite_buildings`   | text     | empty   | Keys of favorite buildings; empty turns the feature off |
+| `favorite_buildings_enabled` | checkbox | `true` | Builds favorite buildings; the list itself comes from the star button |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -106,7 +124,14 @@ Everything is read at runtime from the merged game data:
 - `cm:get_building_level_upgrades` — the upgrades of a building;
 - `CreateCost(settlement)` on `CcoBuildingLevelRecord` — the cost, the same expression the
   construction panel shows;
-- `CanAfford`, `IsLockedByAnyTech`, `IsLockedByLevel` and the like — availability.
+- `CanAfford`, `IsLockedByAnyTech`, `IsLockedByLevel` and the like — availability;
+- the slot's chain — the key of a favorite building.
+
+The star button adds to the vanilla popup from a script and replaces no UI file. Neither
+Radious nor its bugfix submod overrides the popup, `settlement_building_slot`, the button
+templates or `ui/cco/`, and none of their scripts touch the popup (checked on 2026-10-31).
+A mod that replaces `building_construction_popup` and renames its components would lose the
+button: `find_options_list` finds nothing and the game keeps working without it.
 
 ## How it works
 
@@ -135,7 +160,9 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
-| `favorite_buildings` text box: long lists                            | **Not tested in the game**     |
+| Star button: position, icon size, states, clicks, staying open under the mouse | **Not tested in the game**     |
+| Hovering `square_building_button` for all slot kinds, primary slots included | **Not tested in the game**     |
+| `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
 | `PlayersFactionChainList` read from Lua, the list of faction buildings | Found in `ui/cco/buildings.cco`, **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
@@ -164,15 +191,16 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
 ## Conventions / gotchas
 
 - Logs are written to the game folder: `!!af_tweaker.txt` (gated by the `enable_logging`
-  option, off by default) and `!!af_tweaker-errors.txt` (always written).
+  option, off by default) and `!!af_tweaker-errors.txt` (always written). UI listeners go
+  through `with_error_log`, since their errors are otherwise lost.
 - Log lines show the in-game name in the game's language next to the key, like
   `Name (key)`. The key alone means the game returned no name: building names come from
   `PlayerVariantRecordContext.Name` on `CcoBuildingLevelRecord`, settlement names from
   `Name` on `CcoCampaignSettlement`.
 - The start line of the log is written on the first tick, not at load time: the MCT settings
   may not be loaded yet when the script file runs.
-- A new tweak gets its own section in the MCT file with a way to turn it off (a checkbox or
-  an empty list), and its own section in this guide.
+- A new tweak gets its own section in the MCT file with an on/off option, and its own
+  section in this guide.
 - `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
   must only define settings; `cm` isn't available there.
 - Keep `mod_version` in sync with [changelog.txt](changelog.txt) and [readme.md](readme.md)

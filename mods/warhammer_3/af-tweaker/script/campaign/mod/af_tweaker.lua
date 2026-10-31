@@ -1,20 +1,31 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.2.1'
+local mod_version = '0.3.0'
 
 local mct_mod_key = 'af_tweaker'
 
--- All values except turn_start_delay are defaults, used when MCT is not installed
+-- All values except the delays and tries are defaults, used when MCT is not installed
 local settings = {
     enable_logging = false,
     auto_upgrade_enabled = true,
-    favorite_buildings = '',
+    favorite_buildings_enabled = true,
     min_treasury = 5000,
-    turn_start_delay = 0.5
+    turn_start_delay = 0.5,
+    popup_retry_delay_ms = 100,
+    popup_tries = 5
 }
 
 local settlement_context = 'CcoCampaignSettlement'
+local slot_context = 'CcoCampaignBuildingSlot'
+
+-- Lives in the game folder, not in a save: favorites are shared by all campaigns
+local favorites_file_name = '!!af_tweaker-favorites.txt'
+local favorite_button_name = 'af_tweaker_favorite_button'
+local favorite_button_template = 'ui/templates/round_small_button_toggle'
+local favorite_button_icon = 'ui/skins/default/icon_reputation_star_gold.png'
+
+local favorites = {}
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -224,18 +235,70 @@ local function upgrade_slot(region, region_cqi, slot_index, cycle)
     log_queued('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key), region, cost, cycle)
 end
 
-local function parse_favorites(text)
-    local favorites = {}
+local function load_favorites()
+    local file = io.open(favorites_file_name, "r")
 
-    for key in string.gmatch(text, '[^%s,;]+') do
-        if common.get_context_value('CcoBuildingLevelRecord', key, 'Key') == key then
+    if not file then return end
+
+    for line in file:lines() do
+        local key = string.match(line, '^%s*(.-)%s*$')
+
+        if key ~= '' then
             table.insert(favorites, key)
+        end
+    end
+
+    file:close()
+end
+
+local function save_favorites()
+    local file = io.open(favorites_file_name, "w")
+
+    if not file then
+        log_errors('Cannot write ' .. favorites_file_name)
+        return
+    end
+
+    file:write(table.concat(favorites, "\n") .. "\n")
+    file:close()
+end
+
+local function find_favorite_index(level_key)
+    for index, key in ipairs(favorites) do
+        if key == level_key then
+            return index
+        end
+    end
+
+    return nil
+end
+
+local function toggle_favorite(level_key)
+    local index = find_favorite_index(level_key)
+
+    if index then
+        table.remove(favorites, index)
+    else
+        table.insert(favorites, level_key)
+    end
+
+    save_favorites()
+    log((index and 'favorite removed: ' or 'favorite added: ') .. building_title(level_key))
+end
+
+-- The list is shared with other campaigns, so it can hold keys from mods that are off now
+local function get_valid_favorites()
+    local valid_favorites = {}
+
+    for _, key in ipairs(favorites) do
+        if common.get_context_value('CcoBuildingLevelRecord', key, 'Key') == key then
+            table.insert(valid_favorites, key)
         else
             log('unknown favorite building: ' .. key)
         end
     end
 
-    return favorites
+    return valid_favorites
 end
 
 local function is_slot_free(region_cqi, slot_index)
@@ -346,11 +409,15 @@ local function run_turn_start_cycle(faction_name)
     local min_treasury = get_setting('min_treasury')
     local treasury = faction:treasury()
     local budget = treasury - min_treasury
-    local cycle = { budget = budget, spent = 0, upgraded = 0, built = 0, favorites = parse_favorites(get_setting('favorite_buildings')) }
+    local cycle = { budget = budget, spent = 0, upgraded = 0, built = 0, favorites = {} }
 
     log('auto build, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
         .. ', min_treasury: ' .. tostring(min_treasury) .. ', budget: ' .. tostring(budget)
     )
+
+    if get_setting('favorite_buildings_enabled') then
+        cycle.favorites = get_valid_favorites()
+    end
 
     if #cycle.favorites > 0 then
         build_favorites(faction, cycle)
@@ -369,7 +436,7 @@ local function run_turn_start_cycle(faction_name)
 end
 
 local function on_player_turn_start(context)
-    if not get_setting('auto_upgrade_enabled') and get_setting('favorite_buildings') == '' then
+    if not get_setting('auto_upgrade_enabled') and not get_setting('favorite_buildings_enabled') then
         return
     end
 
@@ -464,6 +531,145 @@ local function log_faction_buildings()
 
     log(table.concat(lines, '\n'))
 end
+
+-- A building slot and everything inside it, its popup included, hang under a component
+-- named CcoCampaignBuildingSlot + its id. Each slot has its own popup.
+local function find_slot_component(uic)
+    for _ = 1, 16 do
+        if string.find(uic:Id(), slot_context, 1, true) == 1 then
+            return uic
+        end
+
+        local parent = uic:Parent()
+
+        if not parent then
+            return nil
+        end
+
+        uic = UIComponent(parent)
+    end
+
+    return nil
+end
+
+-- A favorite is stored as the first level of the chain: that's what an empty slot can build
+local function get_slot_favorite_key(slot_uic)
+    local slot_id = slot_uic:GetContextObjectId(slot_context)
+
+    if not slot_id then
+        return nil
+    end
+
+    local is_own_building = common.get_context_value(slot_context, slot_id,
+        'IsEmpty == false && IsPlayerFaction && IsForeignSlot == false'
+    )
+
+    if not is_own_building then
+        return nil
+    end
+
+    return common.get_context_value(slot_context, slot_id,
+        'BuildingContext.BuildingLevelRecordContext.BuildingChainRecordContext.LevelsList.FirstContext.Key'
+    )
+end
+
+local function update_favorite_button(button, level_key)
+    if find_favorite_index(level_key) then
+        button:SetState('selected')
+        button:SetTooltipText('Remove from favorite buildings', true)
+    else
+        button:SetState('active')
+        button:SetTooltipText('Add to favorite buildings', true)
+    end
+end
+
+local function find_options_list(slot_uic)
+    return find_uicomponent(slot_uic, 'building_construction_popup', 'popup_holder', 'popup_panel',
+        'building_tree_holder', 'options_parent', 'options_buttons', 'options_list'
+    )
+end
+
+local function add_favorite_button(slot_uic, level_key, tries_left)
+    local options_list = find_options_list(slot_uic)
+
+    -- The popup is built after the mouse enters the slot
+    if not options_list then
+        if tries_left > 1 then
+            cm:real_callback(function()
+                add_favorite_button(slot_uic, level_key, tries_left - 1)
+            end, settings.popup_retry_delay_ms)
+        end
+
+        return
+    end
+
+    local button = core:get_or_create_component(favorite_button_name, favorite_button_template, options_list)
+
+    button:SetImagePath(favorite_button_icon, 0)
+    update_favorite_button(button, level_key)
+    options_list:Layout()
+end
+
+local function on_slot_mouse_on(context)
+    local slot_uic = find_slot_component(UIComponent(context.component))
+
+    if not slot_uic then
+        return
+    end
+
+    local level_key = get_slot_favorite_key(slot_uic)
+
+    if level_key then
+        add_favorite_button(slot_uic, level_key, settings.popup_tries)
+    end
+end
+
+local function on_favorite_button_click(context)
+    local button = UIComponent(context.component)
+    local slot_uic = find_slot_component(button)
+    local level_key = slot_uic and get_slot_favorite_key(slot_uic)
+
+    if not level_key then
+        log_errors('Favorite button: building not found')
+        return
+    end
+
+    toggle_favorite(level_key)
+    update_favorite_button(button, level_key)
+end
+
+-- An error inside a UI listener is otherwise lost
+local function with_error_log(name, handler)
+    return function(context)
+        local is_ok, error_text = pcall(handler, context)
+
+        if not is_ok then
+            log_errors(name .. ': ' .. tostring(error_text))
+        end
+    end
+end
+
+core:add_listener(
+    "AfTweakerSlotMouseOn",
+    "ComponentMouseOn",
+    function(context)
+        return context.string == 'square_building_button'
+    end,
+    with_error_log('on_slot_mouse_on', on_slot_mouse_on),
+    true
+)
+
+core:add_listener(
+    "AfTweakerFavoriteButton",
+    "ComponentLClickUp",
+    function(context)
+        return context.string == favorite_button_name
+    end,
+    with_error_log('on_favorite_button_click', on_favorite_button_click),
+    true
+)
+
+load_favorites()
 
 -- The first tick is the earliest moment when the MCT settings are certainly loaded
 cm:add_first_tick_callback(function()
