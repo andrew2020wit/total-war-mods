@@ -60,7 +60,8 @@ A building is left alone when:
 
 Buildings that cost development points or a pooled resource, such as the raw materials of the
 Chaos Dwarfs, are queued one at a time, because the mod waits to see what's left after each of
-them. With many such buildings this can take a few seconds at the start of your turn.
+them. With many such buildings this can take a few seconds at the start of your turn. The same
+goes for several copies of a favorite building, as the game may limit how many you can have.
 
 ## Favorite buildings
 

@@ -32,6 +32,8 @@ local function count(text, pattern)
 end
 
 -- world: { skills, points, commit_delay, buildings..., settings, is_mp }
+-- Buildings go in world.slots of one region, or in world.regions: { { cqi, name, province, slots } }.
+-- world.caps limit a key: { limit, per_province }. The game sees new buildings a round later.
 local function start(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -41,7 +43,9 @@ local function start(world)
 
     local timers, listeners, first_tick, polls = {}, {}, {}, {}
     local pending_commits = {}
+    local pending_buildings = {}
     local commands = {}
+    local size_queries = {}
     local env = setmetatable({}, { __index = _G })
 
     env.io = {
@@ -70,13 +74,19 @@ local function start(world)
         }
     end
 
-    local region = {
-        cqi = function() return 7 end,
-        name = function() return 'r1' end,
-        province_name = function() return 'p1' end,
-        has_development_points_to_upgrade = function() return (world.development_points or 0) > 0 end,
-        garrison_residence = function() return { is_under_siege = function() return false end } end
-    }
+    local region_data = world.regions or (world.slots and { { cqi = 7, name = 'r1', province = 'p1', slots = world.slots } }) or {}
+    local regions = {}
+    local region_of_cqi = {}
+    for i, data in ipairs(region_data) do
+        region_of_cqi[data.cqi] = data
+        regions[i] = {
+            cqi = function() return data.cqi end,
+            name = function() return data.name end,
+            province_name = function() return data.province end,
+            has_development_points_to_upgrade = function() return (world.development_points or 0) > 0 end,
+            garrison_residence = function() return { is_under_siege = function() return false end } end
+        }
+    end
     local function list(items)
         return { num_items = function() return #items end, item_at = function(_, i) return items[i + 1] end }
     end
@@ -87,7 +97,7 @@ local function start(world)
     local faction = {
         name = function() return 'player' end,
         treasury = function() return world.treasury or 100000 end,
-        region_list = function() return list(world.slots and { region } or {}) end,
+        region_list = function() return list(regions) end,
         character_list = function() return list(world.skills and { character } or {}) end,
         is_factions_turn = function() return world.turn_over ~= true end
     }
@@ -118,6 +128,14 @@ local function start(world)
         return key
     end
     local function level_info(key) return world.levels[key] or {} end
+    local function cap_key(key, cqi)
+        local cap = world.caps and world.caps[key]
+        return cap and cap.per_province and (key .. ':' .. region_of_cqi[cqi].province) or key
+    end
+    local function is_under_cap(key, cqi)
+        local cap = world.caps and world.caps[key]
+        return not cap or (world.built_counts[cap_key(key, cqi)] or 0) < cap.limit
+    end
 
     env.common = {
         get_context_value = function(context, id, expr)
@@ -128,7 +146,7 @@ local function start(world)
 
             if context == 'CcoCampaignBuildingSlot' then
                 if expr:find('IsEmpty == false') then return true end
-                return 'chain_first_level'
+                return world.slot_keys and world.slot_keys[id] or 'chain_first_level'
             end
 
             if context == 'CcoCampaignCharacter' then
@@ -145,10 +163,14 @@ local function start(world)
             end
 
             -- settlement
-            if expr == 'this.BuildingSlotList.Size' then return #world.slots end
+            local slots = region_of_cqi[id].slots
+            if expr == 'this.BuildingSlotList.Size' then
+                size_queries[id] = (size_queries[id] or 0) + 1
+                return #slots
+            end
             if expr == 'this.Name' then return 'Region' end
             local slot = slot_of(expr)
-            local data = slot and world.slots[slot + 1]
+            local data = slot and slots[slot + 1]
             if expr:find('%.IsEmpty == false && ') then
                 return data.level ~= nil and data.upgrade == true and not data.busy
             end
@@ -158,9 +180,9 @@ local function start(world)
                 return level_info(level_of(expr)).pooled == true
             end
             if expr:find('^IsContextValid') then
-                return world.is_favorite_possible == nil or world.is_favorite_possible(level_of(expr))
+                return world.is_favorite_possible == nil or world.is_favorite_possible(level_of(expr), slot)
             end
-            if expr:find('IsActiveForBuildingBrowser') then return true end
+            if expr:find('IsActiveForBuildingBrowser') then return is_under_cap(level_of(expr), id) end
             if expr:find('IsLockedByAnyTech') then return true end
             if expr:find('CreateCost') then return level_info(level_of(expr)).cost or 100 end
             if expr:find('DevelopmentPointCost') then return level_info(level_of(expr)).development or 0 end
@@ -178,14 +200,24 @@ local function start(world)
                     world.added = skill
                 end
             else
-                local slot = world.slots[slot_of(expr) + 1]
+                local slot = region_of_cqi[id].slots[slot_of(expr) + 1]
                 if not world.refuse_buildings then slot.busy = true end
                 table.insert(world.queued, level_of(expr) or 'upgrade ' .. slot_of(expr))
+                table.insert(pending_buildings, { key = level_of(expr), cqi = id })
             end
         end
     }
 
     local function apply_commits()
+        world.built_counts = world.built_counts or {}
+        for _, building in ipairs(pending_buildings) do
+            if building.key then
+                local key = cap_key(building.key, building.cqi)
+                world.built_counts[key] = (world.built_counts[key] or 0) + 1
+            end
+        end
+        pending_buildings = {}
+
         for i = #pending_commits, 1, -1 do
             local commit = pending_commits[i]
             if commit.rounds == 0 then
@@ -204,9 +236,10 @@ local function start(world)
     chunk()
     for _, f in ipairs(first_tick) do f() end
 
-    local game = { polls = polls, commands = commands, listeners = listeners }
+    local game = { polls = polls, commands = commands, listeners = listeners, size_queries = size_queries }
 
     function game.turn()
+        apply_commits()
         listeners.AfTweakerAutoUpgrade.handler({
             faction = function() return faction end
         })
@@ -216,6 +249,7 @@ local function start(world)
             if steps > 200 then error('rounds never end') end
             local batch = timers
             timers = {}
+            world.round = steps
             apply_commits()
             for _, f in ipairs(batch) do f() end
         end
@@ -269,6 +303,18 @@ do
     game.turn()
     check('all skills refused: the rounds end', world.points == 2 and count(game.log(), 'not charged') == 2)
     check('no skill left is logged', game.log():find('no skill to buy', 1, true) ~= nil)
+end
+
+do
+    local world = {
+        points = 1,
+        settings = { auto_upgrade_enabled = false, favorite_buildings_enabled = false, auto_skills_enabled = true },
+        skills = { { key = 'a', level = 0, total = 5 } }
+    }
+    local game = start(world)
+    game.turn()
+    check('skills alone: the point is spent', world.points == 0)
+    check('skills alone: no building cycle', game.log():find('auto build', 1, true) == nil, game.log())
 end
 
 do
@@ -346,6 +392,109 @@ do
     check('the budget holds across rounds', #world.queued == 2, table.concat(world.queued, ' '))
 end
 
+local function favorites_world(favorites, regions, levels)
+    return {
+        queued = {},
+        favorites = favorites,
+        settings = { auto_upgrade_enabled = false, favorite_buildings_enabled = true, auto_skills_enabled = false, min_treasury = 0 },
+        levels = levels or {},
+        regions = regions
+    }
+end
+
+local function queued_count(world, key)
+    local n = 0
+    for _, queued in ipairs(world.queued) do
+        if queued == key then n = n + 1 end
+    end
+    return n
+end
+
+do
+    local world = favorites_world({ 'fav_a', 'fav_b', 'fav_c' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, {}, {} } }
+    }, {
+        fav_a = { pooled = true, cost = 100 },
+        fav_b = { pooled = true, cost = 200 },
+        fav_c = { cost = 200 }
+    })
+    world.treasury = 300
+    world.is_favorite_possible = function(key, slot) return not (key == 'fav_b' and slot == 2) end
+    local game = start(world)
+    game.turn()
+    check('a waiting favorite keeps its gold', table.concat(world.queued, ' ') == 'fav_a fav_b', table.concat(world.queued, ' '))
+    check('no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = favorites_world({ 'fav_a', 'fav_b', 'fav_c' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, {} } },
+        { cqi = 2, name = 'r2', province = 'p2', slots = { {} } }
+    }, {
+        fav_a = { pooled = true, cost = 100 },
+        fav_b = { pooled = true, cost = 100 },
+        fav_c = { cost = 50 }
+    })
+    world.treasury = 200
+    world.is_favorite_possible = function(key) return not (key == 'fav_b' and world.round >= 2) end
+    local game = start(world)
+    game.turn()
+    check('gold that came back reaches the next region', queued_count(world, 'fav_c') == 2, table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_a', 'fav_b' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, {} } },
+        { cqi = 2, name = 'r2', province = 'p2', slots = { { level = 'l1' } } }
+    }, { fav_a = { pooled = true }, fav_b = { pooled = true } })
+    world.settings.auto_upgrade_enabled = true
+    world.upgrades = {}
+    local game = start(world)
+    game.turn()
+    check('later rounds skip a region with nothing to do', game.size_queries[2] == 2, game.size_queries[2])
+    check('later rounds go to the region that waits', #world.queued == 2, table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_capped', 'fav_other' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {} } },
+        { cqi = 2, name = 'r2', province = 'p2', slots = { {} } },
+        { cqi = 3, name = 'r3', province = 'p2', slots = { {} } }
+    })
+    world.caps = { fav_capped = { limit = 1 } }
+    local game = start(world)
+    game.turn()
+    check('a cap of one per faction holds', queued_count(world, 'fav_capped') == 1, table.concat(world.queued, ' '))
+    check('the slots go to the next favorite', queued_count(world, 'fav_other') == 2, table.concat(world.queued, ' '))
+    check('a cap: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = favorites_world({ 'fav_capped', 'fav_other' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {} } },
+        { cqi = 2, name = 'r2', province = 'p1', slots = { {} } },
+        { cqi = 3, name = 'r3', province = 'p2', slots = { {} } },
+        { cqi = 4, name = 'r4', province = 'p2', slots = { {} } }
+    })
+    world.caps = { fav_capped = { limit = 1, per_province = true } }
+    local game = start(world)
+    game.turn()
+    check('a cap of one per province holds', queued_count(world, 'fav_capped') == 2, table.concat(world.queued, ' '))
+    check('its other slots go to the next favorite', queued_count(world, 'fav_other') == 2, table.concat(world.queued, ' '))
+end
+
+do
+    local regions = {}
+    for i = 1, 6 do
+        regions[i] = { cqi = i, name = 'r' .. i, province = 'p' .. i, slots = { {} } }
+    end
+    local world = favorites_world({ 'fav_a' }, regions)
+    local game = start(world)
+    game.turn()
+    check('without a cap all copies are built', queued_count(world, 'fav_a') == 6, table.concat(world.queued, ' '))
+    check('copies take few rounds', game.steps <= 3, game.steps)
+end
+
 -- Polling
 do
     local world = { settings = {} }
@@ -369,6 +518,20 @@ do
     local game = start(world)
     for _ = 1, 30 do game.polls[1]() end
     check('a failing step stops after the limit', count(game.errors(), 'poll_ui') == 20, count(game.errors(), 'poll_ui'))
+end
+
+do
+    local world = { settings = {} }
+    world.root = {}
+    local polls = 0
+    world.find_child = function()
+        polls = polls + 1
+        if polls % 4 <= 1 then error('boom') end
+        return false
+    end
+    local game = start(world)
+    for _ = 1, 100 do game.polls[1]() end
+    check('failures with successes in between do not stop a step', count(game.errors(), 'poll_ui') == 100, count(game.errors(), 'poll_ui'))
 end
 
 -- A small UI tree
@@ -421,6 +584,8 @@ local function ui_world(settings)
         settings = settings,
         root = root,
         card = card,
+        slot = slot,
+        slots_list = slots,
         options_list = options_list,
         find_child = function(parent_uic, name)
             for _, child in ipairs(parent_uic.children) do
@@ -467,6 +632,48 @@ do
     game.polls[1]()
     check('options on show the stars again', star.visible and favorite.visible)
     check('no UI errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    local second = node('slot', world.slots_list)
+    second.context_id = 'slot_2'
+    local second_list = node('options_list', node('building_construction_popup', second))
+    local game = start(world)
+    game.polls[1]()
+    world.slot.hovered, second.hovered = false, true
+    game.polls[1]()
+    local first_star = world.options_list:Find('af_tweaker_favorite_button')
+    local second_star = second_list:Find('af_tweaker_favorite_button')
+    game.listeners.AfTweakerFavoriteButton.handler({ component = second_star, string = second_star.id })
+    world.slot.hovered, second.hovered = true, false
+    game.polls[1]()
+    check('a star of the same chain follows the last click', first_star.state == 'selected', first_star.state)
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    local popup = world.options_list.parent
+    table.remove(world.slot.children)
+    popup.parent = world.root
+    table.insert(world.root.children, popup)
+    local second = node('slot', world.slots_list)
+    second.context_id = 'slot_2'
+    world.slot_keys = { slot_1 = 'first_chain', slot_2 = 'second_chain' }
+    local game = start(world)
+    game.polls[1]()
+    game.polls[1]()
+    local star = world.options_list:Find('af_tweaker_favorite_button')
+    check('a shared popup without a context gets the star', star ~= nil)
+
+    world.slot.hovered, second.hovered = false, true
+    game.polls[1]()
+    game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
+    check('a crossed slot does not take the star', read_file(favorites_file) == 'first_chain\n', read_file(favorites_file))
+
+    game.polls[1]()
+    game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
+    check('a slot the mouse stays on takes the star', read_file(favorites_file):find('second_chain', 1, true) ~= nil, read_file(favorites_file))
 end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))

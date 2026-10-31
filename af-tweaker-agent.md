@@ -35,8 +35,8 @@ The button:
   settlement, with no Lua error and a native stack, and no vanilla script uses it.
 - Don't keep a uicomponent between timer ticks: the game may have destroyed it by then. Every
   poll finds everything anew. An error goes to the error log. After `ui_poll_max_failures`
-  errors only the step that failed stops, the star or the skill buttons, because a single one
-  can come from the UI being rebuilt.
+  errors in a row only the step that failed stops, the star or the skill buttons. A poll that
+  works resets the count, because a single error can come from the UI being rebuilt.
 - The polls run all the time, so they start from `settlement_panel` and
   `character_details_panel`, direct children of the root (`root > settlement_panel >
   settlement_list`, `root > character_details_panel > ... > character_details_panel_skills` in
@@ -55,8 +55,11 @@ The button:
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
 - A click applies to the last building the button was shown for. While the mouse crosses
-  another slot the old popup can still be open, so the key changes only when the context of
-  `options_list` is the hovered slot, or when it has no such context.
+  another slot the old popup can still be open, so the key changes only when the popup belongs
+  to the hovered slot: by the context of `options_list`, by the popup being inside the slot, or,
+  when neither says, by the mouse staying on the slot for two polls in a row.
+- The state of the star is set again whenever the hovered slot changes: two slots of the same
+  chain can each have a popup with a star, and a click updates only one of them.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
 - The icon goes on image index 0 of the template, which shows it at 38x38 in every state. So
@@ -77,19 +80,28 @@ The list:
   `PossibleBuildingChainsList`, `IsActiveForBuildingBrowser`, `DoesBuildingExceedCap`,
   `IsEpisodicRestricted`, `BuildingCanEverBeBuilt`.
 - A key is built at most once per settlement per cycle, because the game doesn't see a
-  queued building until the command is processed. The building cap across settlements has
-  the same blind spot: if the game refuses such a command, the budget of that cycle is
-  simply reduced by a building that wasn't built.
+  queued building until the command is processed.
+- Building caps have the same blind spot, and the script doesn't know which building has a
+  cap, so all favorites are treated alike. The first copy of a key goes alone in its round, which is enough
+  for a cap of one per faction: `DoesBuildingExceedCap` then answers for the rest. After that a
+  round takes one copy per province, which is enough for a cap of one per province. A bigger
+  cap can still be exceeded by the copies of one round. Such a command is refused, and the
+  budget of that cycle is reduced by a building that wasn't built.
 - Development points and pooled resources have the same blind spot, and only gold is counted
   in the script. So the cycle goes in rounds, `round_delay` (0.5 s) apart. A round queues one
   building with a development point cost per province and one building with a pooled resource
   cost per faction (555 vanilla levels, the raw materials of the Chaos Dwarfs first of all).
   What didn't fit waits for the next round, which reads what the game has left. Everything
-  else is queued in the first round. The check for a pooled cost comes from
+  else, except the repeated favorites above, is queued in the first round. The check for a
+  pooled cost comes from
   `dlc29_vmp_vampire_lair_popup.twui.xml`:
   `IsContextValid(cost) && cost.PooledResourceTransactionList.IsEmpty == false`.
-- While a favorite waits for a round, upgrades wait too, so they can't take its money, and the
-  slot stays reserved for it instead of going to the next favorite.
+- While a favorite waits for a round, upgrades wait too, and the slot stays reserved for it
+  instead of going to the next favorite. A building that waits holds its gold until the next
+  round (`reserved`), so what comes later in the order can't take it.
+- Only the first round of a pass, favorites or upgrades, goes through all regions. The next ones
+  look only where a building waits or where the budget didn't reach, as each slot takes
+  several context queries.
 - A slot gets one command per cycle (`queued_slots`). So a game slower than a round can't get
   the same command twice, and a refused command can't repeat. It also means the rounds end:
   a building waits only because another one was queued in that round.
@@ -260,7 +272,9 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto skills in rounds: the commit is done within `round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
 | Auto skills: moving on to the next skill after a refused point       | **Not tested in the game** (0.5.0) |
 | Building rounds for development points and pooled resources          | **Not tested in the game** (0.5.0) |
-| Star button: the context of `options_list` is the slot               | **Not tested in the game** (0.4.5), the button works as before if there's no context |
+| Star button: the context of `options_list` is the slot               | **Not tested in the game** (0.4.5); without a context, the popup inside the slot or two polls on it decide (0.5.1) |
+| Star button: the state after a click on another slot of the chain    | **Not tested in the game** (0.5.1) |
+| Favorites with a cap: refused commands are gone                      | **Not tested in the game** (0.5.1) |
 | Panels as direct children of the root                                | Read from the `[ui]` lines of the script log; polling through them is **not tested in the game** (0.5.0) |
 | Hiding the buttons when an option is turned off                      | **Not tested in the game** (0.5.0) |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |

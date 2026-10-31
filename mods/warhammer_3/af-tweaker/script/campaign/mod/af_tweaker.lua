@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.5.0'
+local mod_version = '0.5.1'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -41,6 +41,8 @@ local skill_max_priority = 3
 
 local favorites = {}
 local favorite_button_key = nil
+local favorite_button_slot_id = nil
+local hovered_slot_id = nil
 local skill_priorities = {}
 
 local function get_setting(option_key)
@@ -211,11 +213,28 @@ local function is_level_available(region_cqi, slot_index, level)
     )
 end
 
+-- Building caps have the same blind spot as the costs below, and the script doesn't know which
+-- building has one. So the first copy of a favorite goes alone, which is enough for a cap of
+-- one per faction, and then a round takes one copy per province, enough for one per province.
+local function waits_for_cap(cycle, level_key, province_name)
+    local provinces = cycle.round_favorites[level_key]
+
+    return provinces ~= nil and (provinces[province_name] or not cycle.known_favorites[level_key])
+end
+
+-- What waits keeps its gold until the next round, or something later in the order would take it
+local function defer_level(region, cost, cycle)
+    cycle.has_deferred = true
+    cycle.recheck_regions[region:name()] = true
+    cycle.budget = cycle.budget - cost
+    cycle.reserved = cycle.reserved + cost
+end
+
 -- The game checks development points and pooled resources against what it has now, and
 -- commands are asynchronous. Only gold is counted in the script, so the others get one
 -- building per round: per province for development points, per faction for resources.
 -- Returns the cost if the building was queued, or nil and true if it waits for the next round.
-local function queue_level(region, region_cqi, slot_index, level, level_key, cycle)
+local function queue_level(region, region_cqi, slot_index, level, level_key, cycle, is_favorite)
     local slot_key = region_cqi .. ':' .. slot_index
 
     -- The game can be slower than a round, and a refused command must not repeat each round
@@ -231,6 +250,11 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
     end
 
     if cost > cycle.budget then
+        -- The gold of a waiting building can come back in the next round
+        if cycle.reserved > 0 then
+            cycle.recheck_regions[region:name()] = true
+        end
+
         return nil
     end
 
@@ -243,8 +267,9 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
     end
 
     if (has_development_cost and cycle.development_provinces[province_name])
-        or (has_resource_cost and cycle.pooled_resources_used) then
-        cycle.has_deferred = true
+        or (has_resource_cost and cycle.pooled_resources_used)
+        or (is_favorite and waits_for_cap(cycle, level_key, province_name)) then
+        defer_level(region, cost, cycle)
         return nil, true
     end
 
@@ -262,6 +287,13 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
 
     if has_development_cost then
         cycle.development_provinces[province_name] = true
+    end
+
+    if is_favorite then
+        local provinces = cycle.round_favorites[level_key] or {}
+
+        provinces[province_name] = true
+        cycle.round_favorites[level_key] = provinces
     end
 
     return cost
@@ -415,7 +447,7 @@ local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, bui
         local level = favorite_expression(slot_index, level_key)
 
         if not built_in_region[level_key] and is_favorite_buildable(region_cqi, slot_index, level) then
-            local cost, is_deferred = queue_level(region, region_cqi, slot_index, level, level_key, cycle)
+            local cost, is_deferred = queue_level(region, region_cqi, slot_index, level, level_key, cycle, true)
 
             -- The slot is kept for it: a favorite further down the list doesn't take its place
             if is_deferred then
@@ -458,20 +490,32 @@ local function for_each_slot(region, cycle, handler)
     end
 end
 
-local function for_each_region(faction, cycle, region_handler)
+-- The first round of a pass goes through all regions, the next ones only through those where
+-- a round can change something: a building waits there, or the budget didn't reach them.
+local function for_each_region(faction, cycle, pass, region_handler)
     local region_list = faction:region_list()
+    local regions = pass.regions
+
+    pass.regions = {}
 
     for i = 0, region_list:num_items() - 1 do
-        if cycle.budget <= 0 then
-            break
-        end
+        local region = region_list:item_at(i)
+        local region_name = region:name()
 
-        region_handler(region_list:item_at(i))
+        if not regions or regions[region_name] then
+            if cycle.budget > 0 then
+                region_handler(region)
+            end
+
+            if cycle.budget <= 0 or cycle.recheck_regions[region_name] then
+                pass.regions[region_name] = true
+            end
+        end
     end
 end
 
 local function build_favorites(faction, cycle)
-    for_each_region(faction, cycle, function(region)
+    for_each_region(faction, cycle, cycle.favorite_pass, function(region)
         -- Commands are asynchronous, the game doesn't see this region's new buildings yet
         local built_in_region = cycle.built_in_regions[region:name()] or {}
 
@@ -484,7 +528,7 @@ local function build_favorites(faction, cycle)
 end
 
 local function upgrade_buildings(faction, cycle)
-    for_each_region(faction, cycle, function(region)
+    for_each_region(faction, cycle, cycle.upgrade_pass, function(region)
         for_each_slot(region, cycle, upgrade_slot)
     end)
 end
@@ -494,11 +538,20 @@ end
 local function run_building_round(faction_name, cycle)
     local faction = cm:get_faction(faction_name)
 
+    cycle.budget = cycle.budget + cycle.reserved
+    cycle.reserved = 0
+
     if not faction:is_factions_turn() then
         return false
     end
 
+    for level_key in pairs(cycle.round_favorites) do
+        cycle.known_favorites[level_key] = true
+    end
+
     cycle.has_deferred = false
+    cycle.recheck_regions = {}
+    cycle.round_favorites = {}
     cycle.development_provinces = {}
     cycle.pooled_resources_used = false
 
@@ -528,9 +581,11 @@ local function run_turn_start_cycle(faction_name)
         upgrades_enabled = get_setting('auto_upgrade_enabled'),
         built_in_regions = {},
         queued_slots = {},
-        development_provinces = {},
-        pooled_resources_used = false,
-        has_deferred = false
+        reserved = 0,
+        round_favorites = {},
+        known_favorites = {},
+        favorite_pass = {},
+        upgrade_pass = {}
     }
 
     log('auto build, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
@@ -779,9 +834,9 @@ end
 
 local function on_player_turn_start(context)
     local auto_skills_enabled = get_setting('auto_skills_enabled')
+    local auto_build_enabled = get_setting('auto_upgrade_enabled') or get_setting('favorite_buildings_enabled')
 
-    if not auto_skills_enabled and not get_setting('auto_upgrade_enabled')
-        and not get_setting('favorite_buildings_enabled') then
+    if not auto_skills_enabled and not auto_build_enabled then
         return
     end
 
@@ -793,14 +848,16 @@ local function on_player_turn_start(context)
     end
 
     cm:callback(function()
-        local is_ok, error_text = pcall(run_turn_start_cycle, faction_name)
+        if auto_build_enabled then
+            local is_ok, error_text = pcall(run_turn_start_cycle, faction_name)
 
-        if not is_ok then
-            log_errors('run_turn_start_cycle: ' .. tostring(error_text))
+            if not is_ok then
+                log_errors('run_turn_start_cycle: ' .. tostring(error_text))
+            end
         end
 
         if auto_skills_enabled then
-            is_ok, error_text = pcall(run_auto_skills, faction_name)
+            local is_ok, error_text = pcall(run_auto_skills, faction_name)
 
             if not is_ok then
                 log_errors('run_auto_skills: ' .. tostring(error_text))
@@ -873,15 +930,21 @@ local function update_favorite_button(button, level_key)
     end
 end
 
+-- Also says if the popup is inside the slot: such a popup can't belong to another slot
 local function find_options_list(slot_uic)
-    local popup = find_component(slot_uic, popup_name) or find_component(core:get_ui_root(), popup_name)
+    local slot_popup = find_component(slot_uic, popup_name)
+    local popup = slot_popup or find_component(core:get_ui_root(), popup_name)
 
-    return popup and find_component(popup, 'options_list')
+    return popup and find_component(popup, 'options_list'), slot_popup ~= nil
 end
 
 local function refresh_favorite_button()
     local slot_uic = find_hovered_slot()
     local slot_id = slot_uic and slot_uic:GetContextObjectId(slot_context)
+    local is_slot_settled = slot_id == hovered_slot_id
+
+    hovered_slot_id = slot_id
+
     local level_key = slot_id and get_slot_favorite_key(slot_id)
 
     if not level_key then
@@ -889,7 +952,7 @@ local function refresh_favorite_button()
     end
 
     -- The game opens the popup some time after the mouse enters the slot
-    local options_list = find_options_list(slot_uic)
+    local options_list, is_slot_popup = find_options_list(slot_uic)
 
     if not options_list then
         return
@@ -898,7 +961,12 @@ local function refresh_favorite_button()
     -- On the way to the star the mouse can cross another slot while this popup is still open
     local popup_slot_id = options_list:GetContextObjectId(slot_context)
 
-    if popup_slot_id and popup_slot_id ~= '' and popup_slot_id ~= slot_id then
+    if popup_slot_id and popup_slot_id ~= '' then
+        if popup_slot_id ~= slot_id then
+            return
+        end
+    elseif not is_slot_popup and not is_slot_settled then
+        -- Nothing tells whose popup it is: a slot the mouse only crosses doesn't get the star
         return
     end
 
@@ -911,10 +979,13 @@ local function refresh_favorite_button()
         end
 
         favorite_button_key = nil
+        favorite_button_slot_id = nil
         return
     end
 
-    if favorite_button_key == level_key and find_component(options_list, favorite_button_name) then
+    -- Another slot of the same chain can have a popup with a star from before the last click
+    if favorite_button_key == level_key and favorite_button_slot_id == slot_id
+        and find_component(options_list, favorite_button_name) then
         return
     end
 
@@ -926,6 +997,7 @@ local function refresh_favorite_button()
     options_list:Layout()
 
     favorite_button_key = level_key
+    favorite_button_slot_id = slot_id
 end
 
 -- The game names the parent of a card after the skill:
@@ -1047,8 +1119,8 @@ end
 
 -- Vanilla components don't report hovers to scripts, and the game crashed in a test with
 -- common.force_report_of_all_ui_script_events on, so the UI is polled instead.
--- A step survives a few failures, which can come from the UI being rebuilt, and then stops:
--- it would repeat several times per second otherwise. The other step goes on.
+-- A step survives a few failures in a row, which can come from the UI being rebuilt, and then
+-- stops: it would repeat several times per second otherwise. The other step goes on.
 local ui_poll_steps = {
     { name = 'refresh_favorite_button', handler = refresh_favorite_button, failures = 0 },
     { name = 'refresh_skill_buttons', handler = refresh_skill_buttons, failures = 0 }
@@ -1059,7 +1131,9 @@ local function poll_ui()
         if step.failures < settings.ui_poll_max_failures then
             local is_ok, error_text = pcall(step.handler)
 
-            if not is_ok then
+            if is_ok then
+                step.failures = 0
+            else
                 step.failures = step.failures + 1
                 log_errors('poll_ui, ' .. step.name .. ': ' .. tostring(error_text))
             end
