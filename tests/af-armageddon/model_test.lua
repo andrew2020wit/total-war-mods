@@ -1,6 +1,7 @@
 -- Runs af_armageddon.lua against a small model of the game. Run it from the repository root,
 -- see af_armageddon-agent.md. It isn't part of the mod.
 local mod_path = 'mods/warhammer_3/!!af_armageddon/script/campaign/mod/af_armageddon.lua'
+local mct_path = 'mods/warhammer_3/!!af_armageddon/script/mct/settings/af_armageddon.lua'
 local file_prefix = (os.getenv('TEMP') or os.getenv('TMPDIR') or '/tmp') .. '/af_armageddon_test_'
 
 local failed = 0
@@ -24,19 +25,66 @@ local function list(items)
     return { num_items = function() return #items end, item_at = function(_, i) return items[i + 1] end }
 end
 
--- The settings are a local table of the script, so they're changed in its text.
-local function apply_settings(source, settings)
-    for key, value in pairs(settings) do
-        local changed, count = source:gsub(key .. ' = %w+', key .. ' = ' .. tostring(value))
-        assert(count == 1, 'setting not found: ' .. key)
-        source = changed
-    end
-    return source
+-- Runs the MCT file and returns its options by key, with its title.
+local function read_mct_options()
+    local mct_source = read_file(mct_path)
+    assert(mct_source ~= '', 'run it from the repository root')
+
+    local options = {}
+    local title
+    local option_methods = {
+        set_text = function() end,
+        set_tooltip_text = function() end,
+        set_default_value = function(self, value) self.default = value end,
+        set_is_global = function(self, value) self.is_global = value end,
+        slider_set_min_max = function(self, min, max) self.min, self.max = min, max end,
+        slider_set_step_size = function(self, step) self.step = step end
+    }
+    local mct_mod = {
+        set_title = function(_, text) title = text end,
+        set_author = function() end,
+        set_description = function() end,
+        add_new_section = function() end,
+        add_new_option = function(_, key, option_type)
+            local option = setmetatable({ type = option_type }, { __index = option_methods })
+            options[key] = option
+            return option
+        end
+    }
+    local env = setmetatable({
+        get_mct = function()
+            return { register_mod = function(_, key) assert(key == 'af_armageddon', key); return mct_mod end }
+        end
+    }, { __index = _G })
+
+    assert(load(mct_source, 'af_armageddon_mct', 't', env))()
+
+    return options, title
 end
 
--- world: { settings, last_turn, ai_culture, player_culture, rank, no_general, null_unit }
+local mct_options, mct_title = read_mct_options()
+
+-- The defaults are a local table of the script, so they're read from its text.
+local function read_script_defaults()
+    local defaults = {}
+    local block = mod_source:match('local settings = (%b{})')
+
+    for key, value in block:gmatch('([%w_]+) = (%w+)') do
+        if value == 'true' or value == 'false' then
+            defaults[key] = value == 'true'
+        else
+            defaults[key] = tonumber(value)
+        end
+    end
+
+    return defaults
+end
+
+-- world: { settings, changes, no_mct, no_mct_mod, last_turn, ai_culture, player_culture,
+-- player_regions, rank, no_general, null_unit }
+-- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
--- bundles (key by turn) and active_bundles, plus the error log in errors.
+-- last_gold, bundles (key by turn) and active_bundles, plus the logs in log and errors.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -47,7 +95,9 @@ local function play(world)
     local xp_turns = {}
     local character_xp = {}
     local gold_count = 0
+    local last_gold = 0
     local bundles, active_bundles = {}, {}
+    local first_tick
     local env = setmetatable({}, { __index = _G })
 
     env.io = {
@@ -59,6 +109,25 @@ local function play(world)
             return io.open(map[name], mode)
         end
     }
+
+    local overrides = world.settings or {}
+
+    if not world.no_mct then
+        env.get_mct = function()
+            return {
+                get_mod_by_key = function(_, key)
+                    assert(key == 'af_armageddon', key)
+                    if world.no_mct_mod then return nil end
+                    return {
+                        get_option_by_key = function(_, option_key)
+                            assert(mct_options[option_key], 'no such MCT option: ' .. option_key)
+                            return { get_finalized_setting = function() return overrides[option_key] end }
+                        end
+                    }
+                end
+            }
+        end
+    end
 
     local unit = {
         is_null_interface = function() return world.null_unit == true end,
@@ -86,14 +155,22 @@ local function play(world)
     }
     local player = {
         culture = function() return world.player_culture or 'wh_main_emp_empire' end,
-        region_list = function() return list({}) end
+        region_list = function()
+            local regions = {}
+            for i = 1, world.player_regions or 0 do regions[i] = {} end
+            return list(regions)
+        end
     }
 
     env.cm = {
+        add_first_tick_callback = function(_, callback) first_tick = callback end,
         turn_number = function() return turn end,
         get_faction = function(_, name) return name == 'ai' and ai or player end,
         get_local_faction_name = function() return 'player' end,
-        treasury_mod = function() gold_count = gold_count + 1 end,
+        treasury_mod = function(_, _, amount)
+            gold_count = gold_count + 1
+            last_gold = amount
+        end,
         apply_effect_bundle = function(_, key)
             bundles[turn] = key
             active_bundles[key] = true
@@ -112,10 +189,14 @@ local function play(world)
         end
     }
 
-    assert(load(apply_settings(mod_source, world.settings or {}), 'af_armageddon', 't', env))()
+    assert(load(mod_source, 'af_armageddon', 't', env))()
+    first_tick()
 
     for current = 1, world.last_turn do
         turn = current
+        for key, value in pairs(world.changes and world.changes[current] or {}) do
+            overrides[key] = value
+        end
         turn_listener({ faction = function() return ai end })
     end
 
@@ -123,8 +204,10 @@ local function play(world)
         xp_turns = table.concat(xp_turns, ','),
         character_xp = table.concat(character_xp, ','),
         gold_count = gold_count,
+        last_gold = last_gold,
         bundles = bundles,
         active_bundles = active_bundles,
+        log = read_file(log_name),
         errors = read_file(err_name)
     }
 end
@@ -286,6 +369,79 @@ do
     for key in pairs(result.active_bundles) do active[#active + 1] = key end
     check('only the last bundle stays active',
         #active == 1 and active[1] == 'af_armageddon_effect_bundle_ai_buff_5', table.concat(active, ','))
+end
+
+print('-- gold')
+
+do
+    local function gold(world)
+        return math.floor(play(world).last_gold + 0.5)
+    end
+
+    check('by default: 2% of income per turn', gold({ last_turn = 1 }) == 20, gold({ last_turn = 1 }))
+    check('time_percent comes from MCT',
+        gold({ settings = { time_percent = 10 }, last_turn = 1 }) == 100,
+        gold({ settings = { time_percent = 10 }, last_turn = 1 }))
+    check('by default: 4% of income per region',
+        gold({ last_turn = 1, player_regions = 2 }) == 100, gold({ last_turn = 1, player_regions = 2 }))
+    check('regions_percent comes from MCT',
+        gold({ settings = { regions_percent = 10 }, last_turn = 1, player_regions = 2 }) == 220,
+        gold({ settings = { regions_percent = 10 }, last_turn = 1, player_regions = 2 }))
+end
+
+print('-- settings')
+
+do
+    local defaults = read_script_defaults()
+
+    for key, value in pairs(defaults) do
+        local option = mct_options[key]
+        check('an MCT option for ' .. key, option ~= nil)
+        if option then
+            check(key .. ': the same default', option.default == value, option.default)
+            check(key .. ': global', option.is_global == true)
+            if option.type == 'slider' then
+                check(key .. ': the default fits the slider',
+                    value >= option.min and value <= option.max and value % option.step == 0, value)
+            end
+        end
+    end
+
+    for key in pairs(mct_options) do
+        check('a default for the MCT option ' .. key, defaults[key] ~= nil)
+    end
+
+    check('logging is off by default', defaults.enable_logging == false)
+
+    local version = mod_source:match("mod_version = '([%d%.]+)'")
+    check('the MCT title has the version of the script', mct_title == 'AF Armageddon v' .. version, mct_title)
+end
+
+check_turns('without MCT: the defaults', { no_mct = true, last_turn = 11 }, '10,11')
+check_turns('MCT without this mod: the defaults', { no_mct_mod = true, last_turn = 11 }, '10,11')
+
+check_turns('a change applies from the next turn', {
+    changes = { [11] = { army_experience_turn_interval = 2 } },
+    last_turn = 13
+}, '10,12')
+
+do
+    local off = play({ last_turn = 10 })
+    check('no log file by default', off.log == '', off.log)
+
+    local no_mct = play({ no_mct = true, last_turn = 10 })
+    check('no log file without MCT', no_mct.log == '', no_mct.log)
+
+    local on = play({ settings = { enable_logging = true }, last_turn = 10 })
+    check('the option writes the log', on.log:find('Armageddon start!', 1, true) ~= nil)
+    check('the log has the bonuses', on.log:find('add_xp_to_army', 1, true) ~= nil)
+
+    local version = mod_source:match("mod_version = '([%d%.]+)'")
+    check('the start line has the version', on.log:find('v. ' .. version, 1, true) ~= nil)
+
+    local unknown = play({ last_turn = 1, ai_culture = 'unknown_culture' })
+    check('errors are written with the log off',
+        unknown.log == '' and unknown.errors:find('unknown_culture', 1, true) ~= nil, unknown.errors)
 end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))

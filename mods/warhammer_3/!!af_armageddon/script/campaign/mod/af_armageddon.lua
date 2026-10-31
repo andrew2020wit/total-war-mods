@@ -1,10 +1,13 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.0.2'
+local mod_version = '9.1.1'
 
+local mct_mod_key = 'af_armageddon'
+
+-- Defaults, used when MCT is not installed
 local settings = {
-    enable_logging = true,
+    enable_logging = false,
     bonus_for_same_culture = false,
     bonus_for_same_culture_group = false,
     regions_percent = 4,
@@ -87,8 +90,36 @@ for group_id, group in ipairs(culture_groups) do
     end
 end
 
+local function get_setting(option_key)
+    local default_value = settings[option_key]
+
+    if not get_mct then
+        return default_value
+    end
+
+    local mct_mod = get_mct():get_mod_by_key(mct_mod_key)
+
+    if not mct_mod then
+        return default_value
+    end
+
+    local option = mct_mod:get_option_by_key(option_key)
+
+    if not option then
+        return default_value
+    end
+
+    local value = option:get_finalized_setting()
+
+    if value == nil then
+        return default_value
+    end
+
+    return value
+end
+
 local function log(text)
-    if not settings.enable_logging then
+    if not get_setting('enable_logging') then
         return
     end
 
@@ -126,14 +157,12 @@ end
 
 local function culture_gets_bonuses(culture, player_culture)
     if culture == player_culture then
-        return settings.bonus_for_same_culture
+        return get_setting('bonus_for_same_culture')
     end
 
-    return settings.bonus_for_same_culture_group
+    return get_setting('bonus_for_same_culture_group')
         or not the_same_culture_group(culture, player_culture)
 end
-
-log('Armageddon start! ' .. os.date() .. ' v. ' .. mod_version)
 
 local function get_current_bundle_key(turn)
     for i = 1, #effect_bundles_turns do
@@ -170,11 +199,11 @@ end
 local function add_xp_to_army(faction_name)
     local current_turn =  cm:turn_number()
 
-    if current_turn < settings.army_experience_start_turn then
+    if current_turn < get_setting('army_experience_start_turn') then
         return
     end
 
-    if current_turn % settings.army_experience_turn_interval ~= 0 then
+    if current_turn % get_setting('army_experience_turn_interval') ~= 0 then
         return
     end
 
@@ -215,12 +244,12 @@ end
 local function add_xp_to_characters(faction_name)
     local current_turn = cm:turn_number()
 
-    if current_turn < settings.character_experience_start_turn then
+    if current_turn < get_setting('character_experience_start_turn') then
         return
     end
 
     local faction = cm:get_faction(faction_name)
-    local xp_bonus = current_turn * settings.experience_for_character
+    local xp_bonus = current_turn * get_setting('experience_for_character')
 
     local characters = faction:character_list()
 
@@ -268,8 +297,8 @@ local function help_ai_each_turn(context)
 
     local player_regions_number = player_faction:region_list():num_items()
 
-    local time_multiplier = settings.time_percent * current_turn / 100
-    local region_multiplier = settings.regions_percent * player_regions_number / 100
+    local time_multiplier = get_setting('time_percent') * current_turn / 100
+    local region_multiplier = get_setting('regions_percent') * player_regions_number / 100
 
     local ai_income = current_faction:income()
 
@@ -308,3 +337,8 @@ core:add_listener(
     help_ai_each_turn,
     true
 )
+
+-- The first tick is the earliest moment when the MCT settings are certainly loaded
+cm:add_first_tick_callback(function()
+    log('Armageddon start! ' .. os.date() .. ' v. ' .. mod_version)
+end)

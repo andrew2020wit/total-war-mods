@@ -38,7 +38,8 @@ etc.) so that, for example, a Khorne player doesn't get bonuses against Tzeentch
 
 ```
 mods/warhammer_3/!!af_armageddon/
-  script/campaign/mod/af_armageddon.lua   <- the entire mod logic (only source file)
+  script/campaign/mod/af_armageddon.lua   <- the mod logic
+  script/mct/settings/af_armageddon.lua   <- the settings window, loaded by MCT
 mods/warhammer_3/!!af_armageddon.pack     <- packed, distributable mod (built with RPFM)
 tests/af-armageddon/model_test.lua        <- tests of the script, see "Tests" below
 af_armageddon-agent.md                    <- this file (lives at repo root, see agent.md's rule on mods/)
@@ -67,6 +68,34 @@ turn 40+ — see `effect_bundles_turns` in the script for the turn thresholds):
 (Read out via the RPFM MCP server on 2026-09-26; re-verify from the `.pack` if it's been
 edited since.)
 
+## Settings
+
+The settings window is provided by
+[Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
+(MCT), a separate Workshop mod and an optional dependency. Without it the mod runs on the
+defaults from the `settings` table in the script.
+
+| Option                            | Type     | Default | Meaning                                     |
+|-----------------------------------|----------|---------|---------------------------------------------|
+| `bonus_for_same_culture`          | checkbox | `false` | Bonuses for the player's own culture        |
+| `bonus_for_same_culture_group`    | checkbox | `false` | Bonuses for the rest of the player's group  |
+| `regions_percent`                 | slider   | `4`     | Percent of income per player region, 0-100  |
+| `time_percent`                    | slider   | `2`     | Percent of income per turn, 0-100           |
+| `experience_for_character`        | slider   | `200`   | Character XP multiplied by the turn number, 0-5000 |
+| `character_experience_start_turn` | slider   | `10`    | First turn of character XP, 1-200           |
+| `army_experience_start_turn`      | slider   | `10`    | First turn of unit XP, 1-200                |
+| `army_experience_turn_interval`   | slider   | `1`     | Unit XP on every n-th turn, 1-50            |
+| `enable_logging`                  | checkbox | `false` | Writes `!!af_armageddon.txt`                |
+
+Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
+them as soon as they're saved in its window, so a change applies from the next faction turn.
+
+All options are global (`set_is_global(true)`): one value for all campaigns. New options must
+set it too.
+
+Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
+tests check that.
+
 ## Toolchain
 
 - Packs (`.pack`) are built/edited with **Rusted PackFile Manager (RPFM)**:
@@ -82,10 +111,15 @@ edited since.)
 
 ## Conventions / gotchas
 
-- Keep `mod_version` at the top of the script in sync with the repo's `changelog.txt` and
-  the root `readme.md` when behavior changes.
+- `mod_version` lives in both scripts, keep them equal: the MCT file shows it in the mod's
+  title, and it runs in the frontend too, where the campaign script doesn't exist. Keep it in
+  sync with the repo's `changelog.txt` and the root `readme.md` when behavior changes.
+- The start line of the log is written on the first tick, not at load time: the MCT settings
+  may not be loaded yet when the script file runs.
+- `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
+  must only define settings; `cm` isn't available there.
 - Logging is file-based, written into the game folder (relative `io.open`, no path):
-  - `!!af_armageddon.txt` — normal run log, gated by `settings.enable_logging`.
+  - `!!af_armageddon.txt` — normal run log, written only with the `enable_logging` option.
   - `!!af_armageddon-errors.txt` — error log, always written (used e.g. when a faction's
     culture isn't found in `culture_group_ids`).
 - `culture_group_ids` is built once at load time by flattening `culture_groups`; when adding
@@ -101,11 +135,13 @@ edited since.)
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
 It covers the unit XP (when it's added and which units and factions get it), the character
-XP, the culture groups and the effect bundle of each turn. It runs the real script against a small model of
-the game and changes the `settings` in the text of the script, because they're a local table.
-The local functions of the script aren't reachable, so it checks what they lead to: the calls
-to the game. It doesn't talk to the real game, so what the game itself answers still needs a
-run in the game. Run it after changing the script, and extend it with the change.
+XP, the gold, the culture groups, the effect bundle of each turn and the settings: the MCT
+file against the defaults of the script, work without MCT, the log option. It runs the real
+script against a small model of the game, MCT included, and changes the settings through the
+MCT options. The local functions of the script aren't reachable, so it checks what they lead
+to: the calls to the game. It doesn't talk to the real game or to the real MCT, so what they
+answer still needs a run in the game. Run it after changing the scripts, and extend it with
+the change.
 
 It needs any Lua 5.4. The one inside the VS Code Lua extension will do. Run it from the
 repository root, it prints `ALL PASSED` at the end:

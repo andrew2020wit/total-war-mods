@@ -14,6 +14,12 @@ It was created to be used with Radious mod, but it's also compatible with any ot
 Mod order doesn't matter.
 You can add it during a campaign. Don't remove it then.
 
+### Settings
+
+The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
+(MCT). It's optional: without it the mod works with the default settings.
+The settings are global: one set of values for all campaigns.
+
 ### About balance
 
 Balance depends on many things: mods, factions, random events, player skills/style.
