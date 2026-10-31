@@ -24,22 +24,23 @@ of each settlement, the mod takes the first favorite that can be built there and
 the budget.
 
 The button:
-- `ComponentMouseOn` isn't sent by default: only components with a `ScriptEventReporter` send
-  it, and vanilla slots have none. The mod calls
-  `common.force_report_of_all_ui_script_events(true)` on the first tick, which the game
-  documents as the switch for modders. It applies to the whole UI, so the listener has no
-  filter by name and must stay cheap.
-- Any `ComponentMouseOn` inside a slot counts: the mod walks up to the parent named
-  `CcoCampaignBuildingSlot<id>`. Components of the popup don't count.
+- The hovered slot is found by polling every 250 ms on a real-time timer: `settlement_list >
+  <settlement> > default_slots_list > <slot>`, asking each slot `IsMouseOverChildren()`.
+- Don't use `ComponentMouseOn` here. Only components with a `ScriptEventReporter` send it, and
+  vanilla slots have none. `common.force_report_of_all_ui_script_events(true)` sends it for the
+  whole UI, but version 0.3.2 with that call crashed the game seconds after a click on a
+  settlement, with no Lua error and a native stack, and no vanilla script uses it.
+- Don't keep a uicomponent between timer ticks: the game may have destroyed it by then. Every
+  poll finds everything anew. An error stops the polling and goes to the error log.
 - The popup comes from the `mouseover` property of `settlement_building_slot`
   (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's looked up by
   name with the recursive `Find`, inside the slot first and then in the whole UI. Don't use a
   full path: the one in the prologue scripts has a `popup_holder` that no longer exists, and
   following it silently finds nothing.
-- The popup opens some time after the mouse enters, so the search repeats on a real-time timer
-  for up to 2 seconds. A new hover cancels the previous search. In the log,
-  `favorite button: slot` means the hover reached the mod, `shown` that the button was
-  added, and `popup not found` that the search gave up.
+- The popup opens some time after the mouse enters, so polls before that find nothing and
+  simply wait for the next one. In the log, `favorite button: hovered` means the mod sees the
+  mouse over the player's building, and `shown` that the button was added.
+- With `favorite_buildings_enabled` off the polling does nothing and the button isn't shown.
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
@@ -155,7 +156,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
-| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 and 0.3.1 didn't show it (wrong path, then no hover events); the fix is **not tested in the game** |
+| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game; polling since 0.3.3 is **not tested in the game** |
 | `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the

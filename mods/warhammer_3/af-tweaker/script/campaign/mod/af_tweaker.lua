@@ -1,19 +1,18 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.2'
+local mod_version = '0.3.3'
 
 local mct_mod_key = 'af_tweaker'
 
--- All values except the delays and tries are defaults, used when MCT is not installed
+-- All values except the timings are defaults, used when MCT is not installed
 local settings = {
     enable_logging = false,
     auto_upgrade_enabled = true,
     favorite_buildings_enabled = true,
     min_treasury = 5000,
     turn_start_delay = 0.5,
-    popup_retry_delay_ms = 100,
-    popup_tries = 20
+    favorite_poll_ms = 250
 }
 
 local settlement_context = 'CcoCampaignSettlement'
@@ -23,12 +22,13 @@ local slot_context = 'CcoCampaignBuildingSlot'
 local favorites_file_name = '!!af_tweaker-favorites.txt'
 local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
-local favorite_button_retry_name = 'af_tweaker_favorite_button_retry'
+local favorite_button_poll_name = 'af_tweaker_favorite_button_poll'
 local favorite_button_template = 'ui/templates/round_small_button_toggle'
 local favorite_button_icon = 'ui/skins/default/icon_reputation_star_gold.png'
 
 local favorites = {}
 local favorite_button_key = nil
+local logged_hover_key = nil
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -459,27 +459,32 @@ local function on_player_turn_start(context)
     end, settings.turn_start_delay)
 end
 
--- Everything in a slot hangs under a component named CcoCampaignBuildingSlot + its id.
--- The popup is skipped: moving the mouse inside it isn't a new hover.
-local function find_hovered_slot(uic)
-    for _ = 1, 16 do
-        local id = uic:Id()
+local function find_component(parent, name)
+    local address = parent:Find(name, false)
 
-        if id == 'root' or id == popup_name then
-            return nil
+    return address and UIComponent(address) or nil
+end
+
+-- Components are looked up anew on each poll: one kept between polls may be gone by then
+local function find_hovered_slot()
+    local settlement_list = find_component(core:get_ui_root(), 'settlement_list')
+
+    if not settlement_list then
+        return nil
+    end
+
+    for i = 0, settlement_list:ChildCount() - 1 do
+        local slot_list = find_component(UIComponent(settlement_list:Find(i)), 'default_slots_list')
+
+        if slot_list then
+            for j = 0, slot_list:ChildCount() - 1 do
+                local slot_uic = UIComponent(slot_list:Find(j))
+
+                if slot_uic:IsMouseOverChildren() then
+                    return slot_uic
+                end
+            end
         end
-
-        if string.find(id, slot_context, 1, true) == 1 then
-            return uic
-        end
-
-        local parent = uic:Parent()
-
-        if not parent then
-            return nil
-        end
-
-        uic = UIComponent(parent)
     end
 
     return nil
@@ -516,31 +521,37 @@ local function update_favorite_button(button, level_key)
     end
 end
 
-local function find_component(parent, name)
-    local address = parent:Find(name, false)
-
-    return address and UIComponent(address) or nil
-end
-
 local function find_options_list(slot_uic)
     local popup = find_component(slot_uic, popup_name) or find_component(core:get_ui_root(), popup_name)
 
     return popup and find_component(popup, 'options_list')
 end
 
-local function add_favorite_button(slot_uic, level_key, tries_left)
-    local options_list = find_options_list(slot_uic)
+local function refresh_favorite_button()
+    if not get_setting('favorite_buildings_enabled') then
+        return
+    end
+
+    local slot_uic = find_hovered_slot()
+    local level_key = slot_uic and get_slot_favorite_key(slot_uic)
+
+    if not level_key then
+        return
+    end
+
+    if logged_hover_key ~= level_key then
+        logged_hover_key = level_key
+        log('favorite button: hovered ' .. slot_uic:Id() .. ', building: ' .. level_key)
+    end
 
     -- The game opens the popup some time after the mouse enters the slot
-    if not options_list then
-        if tries_left > 1 then
-            cm:real_callback(function()
-                add_favorite_button(slot_uic, level_key, tries_left - 1)
-            end, settings.popup_retry_delay_ms, favorite_button_retry_name)
-        else
-            log('favorite button: popup not found, building: ' .. level_key)
-        end
+    local options_list = find_options_list(slot_uic)
 
+    if not options_list then
+        return
+    end
+
+    if favorite_button_key == level_key and find_component(options_list, favorite_button_name) then
         return
     end
 
@@ -554,21 +565,15 @@ local function add_favorite_button(slot_uic, level_key, tries_left)
     log('favorite button: shown, building: ' .. level_key)
 end
 
-local function on_slot_mouse_on(context)
-    local slot_uic = find_hovered_slot(UIComponent(context.component))
+-- Vanilla slots don't report hovers to scripts, and the game crashed in a test with
+-- common.force_report_of_all_ui_script_events on, so the slots are polled instead.
+-- A failure stops the polling: it would repeat several times per second otherwise.
+local function poll_favorite_button()
+    local is_ok, error_text = pcall(refresh_favorite_button)
 
-    if not slot_uic then
-        return
-    end
-
-    local level_key = get_slot_favorite_key(slot_uic)
-
-    log('favorite button: slot ' .. slot_uic:Id() .. ', building: ' .. tostring(level_key))
-
-    cm:remove_real_callback(favorite_button_retry_name)
-
-    if level_key then
-        add_favorite_button(slot_uic, level_key, settings.popup_tries)
+    if not is_ok then
+        cm:remove_real_callback(favorite_button_poll_name)
+        log_errors('refresh_favorite_button: ' .. tostring(error_text))
     end
 end
 
@@ -594,14 +599,6 @@ local function with_error_log(name, handler)
 end
 
 core:add_listener(
-    "AfTweakerSlotMouseOn",
-    "ComponentMouseOn",
-    true,
-    with_error_log('on_slot_mouse_on', on_slot_mouse_on),
-    true
-)
-
-core:add_listener(
     "AfTweakerFavoriteButton",
     "ComponentLClickUp",
     function(context)
@@ -617,13 +614,7 @@ load_favorites()
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
 
-    -- ComponentMouseOn comes only from components with a ScriptEventReporter, which vanilla
-    -- building slots don't have. The game provides this switch for mods, which can't add one.
-    local is_ok, error_text = pcall(common.force_report_of_all_ui_script_events, true)
-
-    if not is_ok then
-        log_errors('force_report_of_all_ui_script_events: ' .. tostring(error_text))
-    end
+    cm:repeat_real_callback(poll_favorite_button, settings.favorite_poll_ms, favorite_button_poll_name)
 end)
 
 core:add_listener(
