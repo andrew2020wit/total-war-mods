@@ -68,6 +68,44 @@ The list:
   the same blind spot: if the game refuses such a command, the budget of that cycle is
   simply reduced by a building that wasn't built.
 
+### Automatic character skills
+
+Off by default. At the start of the player's turn, after the buildings, each character with
+unspent points gets them spent on skills. Skills go by priority, higher first, and in the
+order of the skill tree for equal priorities; skills without a priority go last, so no point
+stays unspent while something can be bought.
+
+- `CcoCampaignCharacter` gives `CanCharacterRankUp`, `SkillPointsAvailable` and `SkillList`.
+  A skill can take a point when `Status == "available"`, it isn't a background skill and
+  `NextLevelContext.IsLocked` is false.
+- A point is added with `AddPoint` on the skill and applied with `CommitSkillChoices` on the
+  character: the same steps as clicking a card and closing the panel, so the game charges
+  the points. Don't use `cm:force_add_skill`: nothing confirms that it charges them.
+- Commands are asynchronous, so the points added to a skill are counted in the script, and
+  there's one commit per character. A skill unlocked by that commit waits for the next turn.
+- Locked skills are just skipped, points aren't saved for them, and their parents aren't
+  prioritized.
+- It's independent from the game's own auto management (`AutoManagementContext`), which works
+  at the end of the turn, so `IsAutoManaging` isn't checked. Wounded characters are skipped.
+
+The priority button:
+- With the feature on, the poll finds the visible `character_details_panel_skills` and walks
+  `list_box` down to the components named `card`. Cards live in `chain<N>`, sometimes inside
+  `template_module`. The game reuses cards, so every poll compares the icon with the skill
+  shown on the card.
+- Each card gets one button that cycles none, 1, 2, 3, none. It's
+  `ui/templates/round_extra_small_button` with all images but the icon replaced by a
+  transparent one, docked at the top right of the card, beside the level pips.
+- `af_tweaker_skill_priority_0..3.png` are 30x30, made from the vanilla gold star.
+
+Priorities belong to a skill key, so they apply to every character with that skill, in every
+campaign. They're in `!!af_tweaker-skill-priorities.txt` in the game folder, as `key=priority`
+lines. The file is read when the script loads and written on each click.
+
+CCO functions are documented at
+https://github.com/chadvandy/tw_modding_resources/blob/master/WH3/cco/documentation.html.
+Check there first, it lists far more than the vanilla layouts use.
+
 ### Automatic building upgrades
 
 For each upgradable building, the cost is compared with the budget. If it fits, the upgrade
@@ -98,6 +136,7 @@ defaults from the `settings` table in the script.
 | `auto_upgrade_enabled` | checkbox | `true`  | Turns the automatic upgrades on             |
 | `min_treasury`         | slider   | `5000`  | Money the mod never touches                 |
 | `favorite_buildings_enabled` | checkbox | `true` | Builds favorite buildings; the list itself comes from the star button |
+| `auto_skills_enabled`  | checkbox | `false` | Spends skill points and shows the priority buttons |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -161,6 +200,8 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Star button: finding the popup, clicks, saving to the file           | Works since 0.3.3, by polling; 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game |
 | Centered icon of the star button                                     | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
+| Auto skills: `AddPoint`, `CommitSkillChoices`, `Status` values, points charged | From the CCO docs, **not tested in the game** |
+| Priority button: the card hierarchy, its context, position, clicks   | From the layout file, **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.
@@ -172,6 +213,7 @@ mods/warhammer_3/af-tweaker/
   script/campaign/mod/af_tweaker.lua      <- the mod logic
   script/mct/settings/af_tweaker.lua      <- the settings window, loaded by MCT
   ui/skins/default/af_tweaker_favorite_star.png  <- icon of the favorite button
+  ui/skins/default/af_tweaker_skill_priority_0..3.png  <- icons of the skill priority button
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file
 ```

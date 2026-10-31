@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.5'
+local mod_version = '0.4.0'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -10,9 +10,10 @@ local settings = {
     enable_logging = false,
     auto_upgrade_enabled = true,
     favorite_buildings_enabled = true,
+    auto_skills_enabled = false,
     min_treasury = 5000,
     turn_start_delay = 0.5,
-    favorite_poll_ms = 250
+    ui_poll_ms = 250
 }
 
 local settlement_context = 'CcoCampaignSettlement'
@@ -22,12 +23,24 @@ local slot_context = 'CcoCampaignBuildingSlot'
 local favorites_file_name = '!!af_tweaker-favorites.txt'
 local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
-local favorite_button_poll_name = 'af_tweaker_favorite_button_poll'
+local ui_poll_name = 'af_tweaker_ui_poll'
 local favorite_button_template = 'ui/templates/round_small_button_toggle'
 local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
 
+local character_context = 'CcoCampaignCharacter'
+local skill_context = 'CcoCampaignCharacterSkill'
+
+-- In the game folder too, for the same reason as the favorites
+local skill_priorities_file_name = '!!af_tweaker-skill-priorities.txt'
+local skill_panel_name = 'character_details_panel_skills'
+local skill_button_name = 'af_tweaker_skill_priority_button'
+local skill_button_template = 'ui/templates/round_extra_small_button'
+local skill_button_transparent_image = 'ui/skins/default/1x1_transparent_white.png'
+local skill_max_priority = 3
+
 local favorites = {}
 local favorite_button_key = nil
+local skill_priorities = {}
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -437,8 +450,157 @@ local function run_turn_start_cycle(faction_name)
     )
 end
 
+local function load_skill_priorities()
+    local file = io.open(skill_priorities_file_name, "r")
+
+    if not file then return end
+
+    for line in file:lines() do
+        local key, priority = string.match(line, '^%s*(.-)%s*=%s*(%d+)%s*$')
+
+        if key then
+            skill_priorities[key] = tonumber(priority)
+        end
+    end
+
+    file:close()
+end
+
+local function save_skill_priorities()
+    local file = io.open(skill_priorities_file_name, "w")
+
+    if not file then
+        log_errors('Cannot write ' .. skill_priorities_file_name)
+        return
+    end
+
+    local keys = {}
+
+    for key in pairs(skill_priorities) do
+        table.insert(keys, key)
+    end
+
+    table.sort(keys)
+
+    for _, key in ipairs(keys) do
+        file:write(key .. '=' .. skill_priorities[key] .. "\n")
+    end
+
+    file:close()
+end
+
+local function get_character_value(character_cqi, expression)
+    return common.get_context_value(character_context, character_cqi, expression)
+end
+
+local function skill_expression(skill_index)
+    return 'SkillList.At(' .. skill_index .. ')'
+end
+
+local function can_add_skill_point(character_cqi, skill_index, added_points)
+    local skill = skill_expression(skill_index)
+
+    local is_open = get_character_value(character_cqi, skill .. '.Status == "available"'
+        .. ' && ' .. skill .. '.IsBackgroundSkill == false'
+        .. ' && IsContextValid(' .. skill .. '.NextLevelContext)'
+        .. ' && ' .. skill .. '.NextLevelContext.IsLocked == false'
+    )
+
+    if not is_open then
+        return false
+    end
+
+    local level = get_character_value(character_cqi, skill .. '.Level') or 0
+    local total_levels = get_character_value(character_cqi, skill .. '.TotalLevels') or 0
+
+    return level + added_points < total_levels
+end
+
+-- Equal priorities go in the order of the skill tree
+local function find_next_skill(character_cqi, added_points)
+    local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
+    local best_index = nil
+    local best_key = nil
+    local best_priority = -1
+
+    for skill_index = 0, skill_number - 1 do
+        local key = get_character_value(character_cqi, skill_expression(skill_index) .. '.Key')
+        local priority = skill_priorities[key] or 0
+
+        if key and priority > best_priority
+            and can_add_skill_point(character_cqi, skill_index, added_points[key] or 0) then
+            best_index = skill_index
+            best_key = key
+            best_priority = priority
+        end
+    end
+
+    return best_index, best_key, best_priority
+end
+
+-- Points are added like clicks on the skill cards and committed like closing the panel, so
+-- the game charges them. Commands are asynchronous: the points of a skill are counted here,
+-- and a skill unlocked by this commit waits for the next turn.
+local function spend_skill_points(character_cqi)
+    local points = get_character_value(character_cqi, 'SkillPointsAvailable') or 0
+    local added_points = {}
+    local spent = 0
+
+    for _ = 1, points do
+        local skill_index, key, priority = find_next_skill(character_cqi, added_points)
+
+        if not skill_index then
+            break
+        end
+
+        common.call_context_command(character_context, character_cqi, skill_expression(skill_index) .. '.AddPoint')
+
+        added_points[key] = (added_points[key] or 0) + 1
+        spent = spent + 1
+
+        log('skill: ' .. tostring(get_character_value(character_cqi, 'Name')) .. ', '
+            .. with_name(get_character_value(character_cqi, skill_expression(skill_index) .. '.Name'), key)
+            .. ', priority: ' .. priority
+        )
+    end
+
+    if spent > 0 then
+        common.call_context_command(character_context, character_cqi, 'CommitSkillChoices')
+    end
+
+    return spent
+end
+
+local function run_auto_skills(faction_name)
+    local character_list = cm:get_faction(faction_name):character_list()
+    local characters = 0
+    local spent = 0
+
+    for i = 0, character_list:num_items() - 1 do
+        local character = character_list:item_at(i)
+
+        if not character:is_wounded() then
+            local character_cqi = character:command_queue_index()
+
+            if get_character_value(character_cqi, 'CanCharacterRankUp && SkillPointsAvailable > 0') then
+                local character_spent = spend_skill_points(character_cqi)
+
+                if character_spent > 0 then
+                    characters = characters + 1
+                    spent = spent + character_spent
+                end
+            end
+        end
+    end
+
+    log('auto skills done, characters: ' .. characters .. ', points spent: ' .. spent)
+end
+
 local function on_player_turn_start(context)
-    if not get_setting('auto_upgrade_enabled') and not get_setting('favorite_buildings_enabled') then
+    local auto_skills_enabled = get_setting('auto_skills_enabled')
+
+    if not auto_skills_enabled and not get_setting('auto_upgrade_enabled')
+        and not get_setting('favorite_buildings_enabled') then
         return
     end
 
@@ -454,6 +616,14 @@ local function on_player_turn_start(context)
 
         if not is_ok then
             log_errors('run_turn_start_cycle: ' .. tostring(error_text))
+        end
+
+        if auto_skills_enabled then
+            is_ok, error_text = pcall(run_auto_skills, faction_name)
+
+            if not is_ok then
+                log_errors('run_auto_skills: ' .. tostring(error_text))
+            end
         end
     end, settings.turn_start_delay)
 end
@@ -558,15 +728,132 @@ local function refresh_favorite_button()
     favorite_button_key = level_key
 end
 
--- Vanilla slots don't report hovers to scripts, and the game crashed in a test with
--- common.force_report_of_all_ui_script_events on, so the slots are polled instead.
+-- The context of a card is held by the card or by a component around it
+local function find_skill_key(uic)
+    for _ = 1, 4 do
+        local skill_id = uic:GetContextObjectId(skill_context)
+
+        if skill_id and skill_id ~= '' then
+            return common.get_context_value(skill_context, skill_id, 'Key')
+        end
+
+        local parent = uic:Parent()
+
+        if not parent then
+            return nil
+        end
+
+        uic = UIComponent(parent)
+    end
+
+    return nil
+end
+
+local function skill_priority_image(priority)
+    return 'ui/skins/default/af_tweaker_skill_priority_' .. priority .. '.png'
+end
+
+local function update_skill_button(button, level_key)
+    local priority = skill_priorities[level_key] or 0
+    local image = skill_priority_image(priority)
+
+    if button:GetImagePath(0) == image then
+        return
+    end
+
+    button:SetImagePath(image, 0)
+
+    if priority == 0 then
+        button:SetTooltipText('Auto skills: no priority. Click to change.', true)
+    else
+        button:SetTooltipText('Auto skills: priority ' .. priority .. ' of ' .. skill_max_priority .. '. Click to change.', true)
+    end
+end
+
+local function refresh_skill_card(card)
+    local key = find_skill_key(card)
+
+    if not key then
+        return
+    end
+
+    local button = find_component(card, skill_button_name)
+
+    if not button then
+        button = core:get_or_create_component(skill_button_name, skill_button_template, card)
+
+        -- Only the icon is shown: a round frame would leave no room for three stars
+        for image_index = 1, button:NumImages() - 1 do
+            button:SetImagePath(skill_button_transparent_image, image_index)
+        end
+
+        button:SetDockingPoint(3)
+        button:SetDockOffset(30, -6)
+    end
+
+    update_skill_button(button, key)
+end
+
+local function refresh_skill_cards(uic, depth)
+    for i = 0, uic:ChildCount() - 1 do
+        local child = UIComponent(uic:Find(i))
+
+        if child:Id() == 'card' then
+            refresh_skill_card(child)
+        elseif depth > 1 then
+            refresh_skill_cards(child, depth - 1)
+        end
+    end
+end
+
+local function refresh_skill_buttons()
+    if not get_setting('auto_skills_enabled') then
+        return
+    end
+
+    local panel = find_component(core:get_ui_root(), skill_panel_name)
+
+    if not panel or not panel:Visible(true) then
+        return
+    end
+
+    local list_box = find_component(panel, 'list_box')
+
+    if list_box then
+        refresh_skill_cards(list_box, 4)
+    end
+end
+
+local function on_skill_button_click(context)
+    local button = UIComponent(context.component)
+    local key = find_skill_key(button)
+
+    if not key then
+        log_errors('Skill priority button: skill not found')
+        return
+    end
+
+    local priority = ((skill_priorities[key] or 0) + 1) % (skill_max_priority + 1)
+
+    skill_priorities[key] = priority > 0 and priority or nil
+
+    save_skill_priorities()
+    update_skill_button(button, key)
+    log('skill priority: ' .. key .. ' = ' .. priority)
+end
+
+-- Vanilla components don't report hovers to scripts, and the game crashed in a test with
+-- common.force_report_of_all_ui_script_events on, so the UI is polled instead.
 -- A failure stops the polling: it would repeat several times per second otherwise.
-local function poll_favorite_button()
-    local is_ok, error_text = pcall(refresh_favorite_button)
+local function poll_ui()
+    local is_ok, error_text = pcall(function()
+        refresh_favorite_button()
+        refresh_skill_buttons()
+    end)
 
     if not is_ok then
-        cm:remove_real_callback(favorite_button_poll_name)
-        log_errors('refresh_favorite_button: ' .. tostring(error_text))
+        cm:remove_real_callback(ui_poll_name)
+        log_errors('poll_ui: ' .. tostring(error_text))
     end
 end
 
@@ -592,6 +879,16 @@ local function with_error_log(name, handler)
 end
 
 core:add_listener(
+    "AfTweakerSkillButton",
+    "ComponentLClickUp",
+    function(context)
+        return context.string == skill_button_name
+    end,
+    with_error_log('on_skill_button_click', on_skill_button_click),
+    true
+)
+
+core:add_listener(
     "AfTweakerFavoriteButton",
     "ComponentLClickUp",
     function(context)
@@ -602,12 +899,13 @@ core:add_listener(
 )
 
 load_favorites()
+load_skill_priorities()
 
 -- The first tick is the earliest moment when the MCT settings are certainly loaded
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
 
-    cm:repeat_real_callback(poll_favorite_button, settings.favorite_poll_ms, favorite_button_poll_name)
+    cm:repeat_real_callback(poll_ui, settings.ui_poll_ms, ui_poll_name)
 end)
 
 core:add_listener(

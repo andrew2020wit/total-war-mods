@@ -64,7 +64,7 @@ project-wide only.
   (`!af_turn_crash_debug_logger.csv`) to help pinpoint what's causing a repeated AI-turn
   crash, so the offending faction/character can then be killed via the in-game Lua console.
 - **AF Tweaker** (`af-tweaker`) — small campaign tweaks with a settings window; for now,
-  automatic building upgrades and favorite buildings. See its dedicated
+  automatic building upgrades, favorite buildings and automatic character skills. See its dedicated
   [af-tweaker-agent.md](af-tweaker-agent.md).
 
 ## Toolchain
