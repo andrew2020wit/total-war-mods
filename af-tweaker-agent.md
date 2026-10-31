@@ -90,12 +90,15 @@ so points stay unspent for the player when no skill with a priority can take the
 
 The priority button:
 - With the feature on, the poll finds the visible `character_details_panel_skills` and walks
-  `list_box` down to the components named `card`. Cards live in `chain<N>`, sometimes inside
-  `template_module`. The game reuses cards, so every poll compares the icon with the skill
-  shown on the card.
+  `list_box` down to the components named `card`. The real path, from the `[ui]` lines of the
+  script log, is `list_box > chain1 > chain > module_<key> > <skill key> > card`, deeper than
+  the layout file suggests. The parent of a card is named after the skill, which gives the key.
+- Every poll compares the icon with the priority of the skill.
 - Each card gets one button that cycles none, 1, 2, 3, none. It's
   `ui/templates/round_extra_small_button` with all images but the icon replaced by a
-  transparent one, docked at the top right of the card, beside the level pips.
+  transparent one. It's docked to the top left corner of the card with a fixed offset, because
+  the script log reports a `card` of about 578x301 while the visible card is 185 wide, so a
+  right-side dock would land far from it.
 - `af_tweaker_skill_priority_0..3.png` are 30x30, made from the vanilla gold star.
 
 Priorities belong to a skill key, so they apply to every character with that skill, in every
@@ -201,7 +204,8 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Centered icon of the star button                                     | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 | Auto skills: `AddPoint`, `CommitSkillChoices`, `Status` values, points charged | From the CCO docs, **not tested in the game** |
-| Priority button: the card hierarchy, its context, position, clicks   | From the layout file, **not tested in the game** |
+| Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
+| Priority button: position, clicks, skill key equal to `SkillList` keys | **Not tested in the game**     |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.

@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.4.1'
+local mod_version = '0.4.2'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -28,7 +28,6 @@ local favorite_button_template = 'ui/templates/round_small_button_toggle'
 local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
 
 local character_context = 'CcoCampaignCharacter'
-local skill_context = 'CcoCampaignCharacterSkill'
 
 -- In the game folder too, for the same reason as the favorites
 local skill_priorities_file_name = '!!af_tweaker-skill-priorities.txt'
@@ -728,25 +727,12 @@ local function refresh_favorite_button()
     favorite_button_key = level_key
 end
 
--- The context of a card is held by the card or by a component around it
-local function find_skill_key(uic)
-    for _ = 1, 4 do
-        local skill_id = uic:GetContextObjectId(skill_context)
+-- The game names the parent of a card after the skill:
+-- list_box > chain1 > chain > module_<key> > <skill key> > card
+local function get_card_skill_key(card)
+    local parent = card:Parent()
 
-        if skill_id and skill_id ~= '' then
-            return common.get_context_value(skill_context, skill_id, 'Key')
-        end
-
-        local parent = uic:Parent()
-
-        if not parent then
-            return nil
-        end
-
-        uic = UIComponent(parent)
-    end
-
-    return nil
+    return parent and UIComponent(parent):Id() or nil
 end
 
 local function skill_priority_image(priority)
@@ -771,7 +757,7 @@ local function update_skill_button(button, level_key)
 end
 
 local function refresh_skill_card(card)
-    local key = find_skill_key(card)
+    local key = get_card_skill_key(card)
 
     if not key then
         return
@@ -787,8 +773,9 @@ local function refresh_skill_card(card)
             button:SetImagePath(skill_button_transparent_image, image_index)
         end
 
-        button:SetDockingPoint(3)
-        button:SetDockOffset(30, -6)
+        -- The top left corner: the reported size of a card is far bigger than the card you see
+        button:SetDockingPoint(1)
+        button:SetDockOffset(152, -24)
     end
 
     update_skill_button(button, key)
@@ -820,13 +807,13 @@ local function refresh_skill_buttons()
     local list_box = find_component(panel, 'list_box')
 
     if list_box then
-        refresh_skill_cards(list_box, 4)
+        refresh_skill_cards(list_box, 5)
     end
 end
 
 local function on_skill_button_click(context)
     local button = UIComponent(context.component)
-    local key = find_skill_key(button)
+    local key = get_card_skill_key(UIComponent(button:Parent()))
 
     if not key then
         log_errors('Skill priority button: skill not found')
