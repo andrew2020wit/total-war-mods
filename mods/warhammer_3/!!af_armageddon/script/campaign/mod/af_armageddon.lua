@@ -5,6 +5,7 @@ local mod_version = '9.0.2'
 
 local settings = {
     enable_logging = true,
+    bonus_for_same_culture_group = false,
     regions_percent = 4,
     time_percent = 2,
     experience_for_character = 200,
@@ -255,7 +256,8 @@ local function help_ai_each_turn(context)
         return
     end
 
-    if (the_same_culture_group(current_culture, player_culture)) then
+    if not settings.bonus_for_same_culture_group
+        and the_same_culture_group(current_culture, player_culture) then
         return
     end
 

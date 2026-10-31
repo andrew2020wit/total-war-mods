@@ -27,7 +27,7 @@ end
 -- The settings are a local table of the script, so they're changed in its text.
 local function apply_settings(source, settings)
     for key, value in pairs(settings) do
-        local changed, count = source:gsub(key .. ' = %d+', key .. ' = ' .. value)
+        local changed, count = source:gsub(key .. ' = %w+', key .. ' = ' .. tostring(value))
         assert(count == 1, 'setting not found: ' .. key)
         source = changed
     end
@@ -142,8 +142,13 @@ local function check_character_xp(name, world, expected)
 end
 
 -- The turn bonuses are the only sign of the culture check outside the script.
-local function check_culture(name, ai_culture, player_culture, gets_bonuses)
-    local result = play({ last_turn = 1, ai_culture = ai_culture, player_culture = player_culture })
+local function check_culture(name, ai_culture, player_culture, gets_bonuses, settings)
+    local result = play({
+        settings = settings,
+        last_turn = 1,
+        ai_culture = ai_culture,
+        player_culture = player_culture
+    })
     check(name, (result.gold_count > 0) == gets_bonuses, result.gold_count)
     check(name .. ': no errors', result.errors == '', result.errors)
 end
@@ -188,7 +193,7 @@ check_turns('no experience for the culture group of the player', {
 
 print('-- character experience')
 
-check_character_xp('by default: every turn from turn 1, scaled by the turn', { last_turn = 3 }, '1:200,2:400,3:600')
+check_character_xp('by default: every turn from turn 10, scaled by the turn', { last_turn = 11 }, '10:2000,11:2200')
 
 check_character_xp('a changed start turn', {
     settings = { character_experience_start_turn = 5 },
@@ -196,9 +201,9 @@ check_character_xp('a changed start turn', {
 }, '5:1000,6:1200')
 
 check_character_xp('it does not depend on the start turn of the units', {
-    settings = { army_experience_start_turn = 3 },
-    last_turn = 2
-}, '1:200,2:400')
+    settings = { army_experience_start_turn = 20 },
+    last_turn = 11
+}, '10:2000,11:2200')
 
 check_turns('the units do not depend on the start turn of the characters', {
     settings = { character_experience_start_turn = 20 },
@@ -216,6 +221,27 @@ do
     local result = play({ last_turn = 1, ai_culture = 'unknown_culture' })
     check('an unknown culture is logged', result.errors:find('unknown_culture', 1, true) ~= nil, result.errors)
     check('an unknown culture still gets bonuses', result.gold_count > 0, result.gold_count)
+end
+
+print('-- bonuses for the culture group of the player')
+
+local same_group_on = { bonus_for_same_culture_group = true }
+
+check_culture('the same group gets bonuses', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', true, same_group_on)
+check_culture('different groups still get them', 'wh2_main_hef_high_elves', 'wh2_dlc09_tmb_tomb_kings', true, same_group_on)
+check_culture('the same culture still gets none', 'wh3_main_ogr_ogre_kingdoms', 'wh3_main_ogr_ogre_kingdoms', false, same_group_on)
+
+do
+    local result = play({
+        settings = same_group_on,
+        last_turn = 10,
+        ai_culture = 'wh_main_dwf_dwarfs'
+    })
+    check('the same group gets gold every turn', result.gold_count == 10, result.gold_count)
+    check('the same group gets unit experience', result.xp_turns == '10', result.xp_turns)
+    check('the same group gets character experience', result.character_xp == '10:2000', result.character_xp)
+    check('the same group gets the effect bundle',
+        result.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1', result.bundles[10])
 end
 
 print('-- effect bundles')
