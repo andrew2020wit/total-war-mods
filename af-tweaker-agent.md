@@ -71,13 +71,17 @@ The list:
 ### Automatic character skills
 
 Off by default. At the start of the player's turn, after the buildings, each character with
-unspent points gets them spent, only on skills with a priority: higher first, and in the
-order of the skill tree for equal priorities. Skills without a priority are never touched,
-so points stay unspent for the player when no skill with a priority can take them.
+unspent points gets them spent. Skills go by priority, higher first, and in the order of the
+skill tree for equal priorities; skills without a priority go last, so no point stays unspent
+while something can be bought.
 
-- `CcoCampaignCharacter` gives `CanCharacterRankUp`, `SkillPointsAvailable` and `SkillList`.
-  A skill can take a point when `Status == "available"`, it isn't a background skill and
-  `NextLevelContext.IsLocked` is false.
+- `CcoCampaignCharacter` gives `SkillPointsAvailable` and `SkillList`. A skill can take a
+  point when its `Status` is `available` or `complete` (it has levels but may take more),
+  it isn't a background skill and `Level < TotalLevels`. The card states in the layout are
+  `available`, `complete`, `maxed`, `researching`, `locked`, `locked_rank`,
+  `locked_auto_unlock`, `locked_upgrade_rank`.
+- If nothing could be bought for a character with points, `no skill to buy` in the log lists
+  the number of skills per status.
 - A point is added with `AddPoint` on the skill and applied with `CommitSkillChoices` on the
   character: the same steps as clicking a card and closing the panel, so the game charges
   the points. Don't use `cm:force_add_skill`: nothing confirms that it charges them.
@@ -203,9 +207,10 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Star button: finding the popup, clicks, saving to the file           | Works since 0.3.3, by polling; 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game |
 | Centered icon of the star button                                     | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
-| Auto skills: `AddPoint`, `CommitSkillChoices`, `Status` values, points charged | From the CCO docs, **not tested in the game** |
+| Auto skills: `AddPoint`, `CommitSkillChoices`, `Status` values, points charged | 0.4.2 spent nothing, filters loosened in 0.4.3; **not tested in the game** |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
-| Priority button: position, clicks, skill key equal to `SkillList` keys | **Not tested in the game**     |
+| Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
+| Skill keys of the cards equal to `SkillList` keys                    | **Not tested in the game**     |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.

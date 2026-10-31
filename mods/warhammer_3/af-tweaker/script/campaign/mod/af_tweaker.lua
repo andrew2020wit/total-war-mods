@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.4.2'
+local mod_version = '0.4.3'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -496,13 +496,14 @@ local function skill_expression(skill_index)
     return 'SkillList.At(' .. skill_index .. ')'
 end
 
+-- "complete" is a skill that has levels already and may take more. Any kind of lock is a
+-- status of its own, like locked_rank, so the status is enough.
 local function can_add_skill_point(character_cqi, skill_index, added_points)
     local skill = skill_expression(skill_index)
 
-    local is_open = get_character_value(character_cqi, skill .. '.Status == "available"'
+    local is_open = get_character_value(character_cqi, '(' .. skill .. '.Status == "available"'
+        .. ' || ' .. skill .. '.Status == "complete")'
         .. ' && ' .. skill .. '.IsBackgroundSkill == false'
-        .. ' && IsContextValid(' .. skill .. '.NextLevelContext)'
-        .. ' && ' .. skill .. '.NextLevelContext.IsLocked == false'
     )
 
     if not is_open then
@@ -515,12 +516,12 @@ local function can_add_skill_point(character_cqi, skill_index, added_points)
     return level + added_points < total_levels
 end
 
--- Only skills with a priority are chosen. Equal priorities go in the order of the skill tree.
+-- Skills without a priority go last. Equal priorities go in the order of the skill tree.
 local function find_next_skill(character_cqi, added_points)
     local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
     local best_index = nil
     local best_key = nil
-    local best_priority = 0
+    local best_priority = -1
 
     for skill_index = 0, skill_number - 1 do
         local key = get_character_value(character_cqi, skill_expression(skill_index) .. '.Key')
@@ -535,6 +536,29 @@ local function find_next_skill(character_cqi, added_points)
     end
 
     return best_index, best_key, best_priority
+end
+
+local function log_skill_statuses(character_cqi, points)
+    local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
+    local statuses = {}
+
+    for skill_index = 0, skill_number - 1 do
+        local status = tostring(get_character_value(character_cqi, skill_expression(skill_index) .. '.Status'))
+
+        statuses[status] = (statuses[status] or 0) + 1
+    end
+
+    local parts = {}
+
+    for status, count in pairs(statuses) do
+        table.insert(parts, status .. ': ' .. count)
+    end
+
+    table.sort(parts)
+
+    log('no skill to buy: ' .. tostring(get_character_value(character_cqi, 'Name'))
+        .. ', points: ' .. points .. ', skills: ' .. skill_number .. ', ' .. table.concat(parts, ', ')
+    )
 end
 
 -- Points are added like clicks on the skill cards and committed like closing the panel, so
@@ -565,6 +589,8 @@ local function spend_skill_points(character_cqi)
 
     if spent > 0 then
         common.call_context_command(character_context, character_cqi, 'CommitSkillChoices')
+    else
+        log_skill_statuses(character_cqi, points)
     end
 
     return spent
@@ -581,7 +607,7 @@ local function run_auto_skills(faction_name)
         if not character:is_wounded() then
             local character_cqi = character:command_queue_index()
 
-            if get_character_value(character_cqi, 'CanCharacterRankUp && SkillPointsAvailable > 0') then
+            if (get_character_value(character_cqi, 'SkillPointsAvailable') or 0) > 0 then
                 local character_spent = spend_skill_points(character_cqi)
 
                 if character_spent > 0 then
