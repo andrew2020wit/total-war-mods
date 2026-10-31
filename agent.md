@@ -21,6 +21,7 @@ mods/warhammer_3/
 imgs/                                       <- Steam Workshop preview images, one per mod
 imgs/tweaker/                               <- screenshots for the AF Tweaker user guide
 docs/                                       <- guides for players
+tests/af-tweaker/                           <- tests of AF Tweaker (see af-tweaker-agent.md)
 readme.md                                   <- end-user description of all mods (Workshop text)
 changelog.txt                               <- version history across mods
 af_armageddon-agent.md                      <- per-mod agent guide for AF Armageddon (see rule below)

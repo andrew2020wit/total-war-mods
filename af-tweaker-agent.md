@@ -273,6 +273,29 @@ check that no `skill point not charged` lines appear for characters with several
 that a pair of locked skills gets only one point; with a faction that uses pooled resources,
 check that several such buildings are queued in one turn.
 
+## Tests
+
+Tests live in `tests/af-tweaker/`, outside `mods/`, so they never get into the pack. They
+check the logic of the script. Neither of them talks to the real game, so what the game itself
+answers still needs a run in the game: see [Verification status](#verification-status). Run
+them after changing the script, and extend them with the change.
+
+- `model_test.lua` runs the script against a small model of the game, UI included: rounds,
+  refused points, the buttons, multiplayer. It needs any Lua 5.4. The one inside the VS Code
+  Lua extension will do. Run it from the repository root, it prints `ALL PASSED` at the end:
+
+  ```bash
+  "$(ls ~/.vscode/extensions/sumneko.lua-*/server/bin/lua-language-server.exe | tail -1)" "$(pwd -W)/tests/af-tweaker/model_test.lua"
+  ```
+
+- `rpfm_test.lua` runs the script with the game's real script libraries, so it also checks
+  loading, the first tick, the listener and the campaign interfaces of the Assembly Kit docs.
+  It needs RPFM's MCP server, the Assembly Kit and the dependencies cache
+  (`generate_dependencies_cache`). It reads the scripts from the open pack, so rebuild the
+  pack first. Pass the text of the file as `code` of `run_lua_tests`: the test engine can't
+  read files from the disk. Don't pass `campaign`. The report is long, its lines of interest
+  start with `AFT`.
+
 ## Repository layout
 
 ```
@@ -285,6 +308,7 @@ mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built wi
 af-tweaker-agent.md                       <- this file
 docs/af-tweaker-user-guide.md             <- guide for players
 imgs/tweaker/                             <- screenshots for the user guide
+tests/af-tweaker/                         <- tests of the script, not part of the pack
 ```
 
 The folder and the pack are `af-tweaker`, while the script files, the MCT key and the
