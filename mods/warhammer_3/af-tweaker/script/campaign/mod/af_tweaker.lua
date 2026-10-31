@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.1.3'
+local mod_version = '0.1.4'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -72,6 +72,25 @@ local function get_value(region_cqi, expression)
     return common.get_context_value(settlement_context, region_cqi, expression)
 end
 
+local function with_name(name, key)
+    if not name or name == '' then
+        return key
+    end
+
+    return name .. ' (' .. key .. ')'
+end
+
+local function building_title(level_key)
+    return with_name(
+        common.get_context_value('CcoBuildingLevelRecord', level_key, 'PlayerVariantRecordContext.Name'),
+        level_key
+    )
+end
+
+local function region_title(region)
+    return with_name(get_value(region:cqi(), 'this.Name'), region:name())
+end
+
 local function slot_expression(slot_index)
     return 'this.BuildingSlotList.At(' .. slot_index .. ')'
 end
@@ -105,7 +124,7 @@ local function find_upgrade_key(level_key)
     for _, key in pairs(upgrades) do
         if cm:building_chain_key_for_building(key) == chain_key then
             if upgrade_key then
-                log('skip branching building: ' .. level_key)
+                log('skip branching building: ' .. building_title(level_key))
                 return nil
             end
 
@@ -185,7 +204,8 @@ local function upgrade_slot(region, region_cqi, slot_index, cycle)
     cycle.spent = cycle.spent + cost
     cycle.upgraded = cycle.upgraded + 1
 
-    log('upgrade ' .. level_key .. ' => ' .. upgrade_key .. ', region: ' .. region:name()
+    log('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key)
+        .. ', region: ' .. region_title(region)
         .. ', cost: ' .. tostring(cost) .. ', budget: ' .. tostring(budget_before) .. ' => ' .. tostring(cycle.budget)
     )
 end

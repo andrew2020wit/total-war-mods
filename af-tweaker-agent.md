@@ -129,6 +129,10 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
 
 - Logs are written to the game folder: `!!af_tweaker.txt` (gated by the `enable_logging`
   option, off by default) and `!!af_tweaker-errors.txt` (always written).
+- Log lines show the in-game name in the game's language next to the key, like
+  `Name (key)`. The key alone means the game returned no name: building names come from
+  `PlayerVariantRecordContext.Name` on `CcoBuildingLevelRecord`, settlement names from
+  `Name` on `CcoCampaignSettlement`.
 - The start line of the log is written on the first tick, not at load time: the MCT settings
   may not be loaded yet when the script file runs.
 - A new tweak gets its own section in the MCT file with an on/off option, and its own
