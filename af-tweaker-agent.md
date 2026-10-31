@@ -34,6 +34,24 @@ mod takes the first listed building that can be built there and that fits the bu
   the same blind spot: if the game refuses such a command, the budget of that cycle is
   simply reduced by a building that wasn't built.
 
+### List of faction buildings
+
+Once per campaign load, shortly after the first tick, the log gets a list sorted by key:
+
+```
+faction buildings: wh_main_vmp_schwartzhafen, levels: 120
+building: Name (wh_main_vmp_cemetary_1), built: 3
+```
+
+It holds every building level from `PlayersFactionChainList` plus anything else standing in
+the player's settlements, such as buildings of other cultures in captured ones. `built`
+counts the current slots of the faction, so `0` means the level is available but not
+standing anywhere. The list helps to pick keys for favorite buildings.
+
+It needs `enable_logging`: with logging off nothing is read, and turning logging on during
+a campaign writes the list only after the next load. A faction without regions gets a single
+line instead, since the chain list is read from a settlement.
+
 ### Automatic building upgrades
 
 For each upgradable building, the cost is compared with the budget. If it fits, the upgrade
@@ -118,6 +136,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
 | `favorite_buildings` text box: long lists                            | **Not tested in the game**     |
+| `PlayersFactionChainList` read from Lua, the list of faction buildings | Found in `ui/cco/buildings.cco`, **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.

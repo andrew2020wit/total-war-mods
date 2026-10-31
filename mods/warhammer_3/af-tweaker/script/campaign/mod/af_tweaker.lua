@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.2.0'
+local mod_version = '0.2.1'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -389,9 +389,93 @@ local function on_player_turn_start(context)
     end, settings.turn_start_delay)
 end
 
+local function count_available_levels(region_cqi, levels)
+    local chain_number = get_value(region_cqi, 'this.PlayersFactionChainList.Size')
+
+    if not chain_number then
+        log_errors('Faction building chains not found')
+        return
+    end
+
+    for chain_index = 0, chain_number - 1 do
+        local level_list = 'this.PlayersFactionChainList.At(' .. chain_index .. ').LevelsList'
+        local level_number = get_value(region_cqi, level_list .. '.Size') or 0
+
+        for level_index = 0, level_number - 1 do
+            local level_key = get_value(region_cqi, level_list .. '.At(' .. level_index .. ').Key')
+
+            if level_key and level_key ~= '' then
+                levels[level_key] = levels[level_key] or 0
+            end
+        end
+    end
+end
+
+local function count_built_levels(region_cqi, levels)
+    local slot_number = get_value(region_cqi, 'this.BuildingSlotList.Size') or 0
+
+    for slot_index = 0, slot_number - 1 do
+        local level_key = get_value(region_cqi,
+            slot_expression(slot_index) .. '.BuildingContext.BuildingLevelRecordContext.Key'
+        )
+
+        if level_key and level_key ~= '' then
+            levels[level_key] = (levels[level_key] or 0) + 1
+        end
+    end
+end
+
+-- Lists what the faction can build, plus anything it owns from other cultures
+local function log_faction_buildings()
+    if not get_setting('enable_logging') then
+        return
+    end
+
+    local faction_name = cm:get_local_faction_name(true)
+    local region_list = cm:get_faction(faction_name):region_list()
+
+    if region_list:num_items() == 0 then
+        log('faction buildings: ' .. faction_name .. ' has no regions')
+        return
+    end
+
+    local levels = {}
+
+    -- The chain list is the same for every settlement of the faction
+    count_available_levels(region_list:item_at(0):cqi(), levels)
+
+    for i = 0, region_list:num_items() - 1 do
+        count_built_levels(region_list:item_at(i):cqi(), levels)
+    end
+
+    local level_keys = {}
+
+    for level_key in pairs(levels) do
+        table.insert(level_keys, level_key)
+    end
+
+    table.sort(level_keys)
+
+    local lines = { 'faction buildings: ' .. faction_name .. ', levels: ' .. #level_keys }
+
+    for _, level_key in ipairs(level_keys) do
+        table.insert(lines, 'building: ' .. building_title(level_key) .. ', built: ' .. levels[level_key])
+    end
+
+    log(table.concat(lines, '\n'))
+end
+
 -- The first tick is the earliest moment when the MCT settings are certainly loaded
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
+
+    cm:callback(function()
+        local is_ok, error_text = pcall(log_faction_buildings)
+
+        if not is_ok then
+            log_errors('log_faction_buildings: ' .. tostring(error_text))
+        end
+    end, settings.turn_start_delay)
 end)
 
 core:add_listener(
