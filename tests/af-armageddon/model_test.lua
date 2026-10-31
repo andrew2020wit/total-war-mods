@@ -34,8 +34,9 @@ local function apply_settings(source, settings)
     return source
 end
 
--- world: { settings, last_turn, ai_culture, rank, no_general, null_unit }
--- Returns the turns on which units got experience, one entry per unit, and the error log.
+-- world: { settings, last_turn, ai_culture, player_culture, rank, no_general, null_unit }
+-- Returns what the AI got: xp_turns (one entry per unit), gold_count, bundles (key by turn)
+-- and active_bundles, plus the error log in errors.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -44,6 +45,8 @@ local function play(world)
     local turn = 0
     local turn_listener
     local xp_turns = {}
+    local gold_count = 0
+    local bundles, active_bundles = {}, {}
     local env = setmetatable({}, { __index = _G })
 
     env.io = {
@@ -74,10 +77,10 @@ local function play(world)
         treasury = function() return 0 end,
         military_force_list = function() return list({ force }) end,
         character_list = function() return list({}) end,
-        has_effect_bundle = function() return false end
+        has_effect_bundle = function(_, key) return active_bundles[key] == true end
     }
     local player = {
-        culture = function() return 'wh_main_emp_empire' end,
+        culture = function() return world.player_culture or 'wh_main_emp_empire' end,
         region_list = function() return list({}) end
     }
 
@@ -85,9 +88,12 @@ local function play(world)
         turn_number = function() return turn end,
         get_faction = function(_, name) return name == 'ai' and ai or player end,
         get_local_faction_name = function() return 'player' end,
-        treasury_mod = function() end,
-        apply_effect_bundle = function() end,
-        remove_effect_bundle = function() end,
+        treasury_mod = function() gold_count = gold_count + 1 end,
+        apply_effect_bundle = function(_, key)
+            bundles[turn] = key
+            active_bundles[key] = true
+        end,
+        remove_effect_bundle = function(_, key) active_bundles[key] = nil end,
         add_experience_to_unit = function() xp_turns[#xp_turns + 1] = turn end
     }
     env.core = {
@@ -104,14 +110,29 @@ local function play(world)
         turn_listener({ faction = function() return ai end })
     end
 
-    return table.concat(xp_turns, ','), read_file(err_name)
+    return {
+        xp_turns = table.concat(xp_turns, ','),
+        gold_count = gold_count,
+        bundles = bundles,
+        active_bundles = active_bundles,
+        errors = read_file(err_name)
+    }
 end
 
 local function check_turns(name, world, expected)
-    local turns, errors = play(world)
-    check(name, turns == expected, turns)
-    check(name .. ': no errors', errors == '', errors)
+    local result = play(world)
+    check(name, result.xp_turns == expected, result.xp_turns)
+    check(name .. ': no errors', result.errors == '', result.errors)
 end
+
+-- The turn bonuses are the only sign of the culture check outside the script.
+local function check_culture(name, ai_culture, player_culture, gets_bonuses)
+    local result = play({ last_turn = 1, ai_culture = ai_culture, player_culture = player_culture })
+    check(name, (result.gold_count > 0) == gets_bonuses, result.gold_count)
+    check(name .. ': no errors', result.errors == '', result.errors)
+end
+
+print('-- unit experience')
 
 check_turns('by default: every turn from turn 10', { last_turn = 14 }, '10,11,12,13,14')
 
@@ -148,6 +169,49 @@ check_turns('no experience for the culture group of the player', {
     last_turn = 12,
     ai_culture = 'wh_main_dwf_dwarfs'
 }, '')
+
+print('-- culture groups')
+
+check_culture('the same group: Chaos and Khorne', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', false)
+check_culture('the same group, the other way', 'wh3_main_kho_khorne', 'wh_main_chs_chaos', false)
+check_culture('different groups: High Elves and Tomb Kings', 'wh2_main_hef_high_elves', 'wh2_dlc09_tmb_tomb_kings', true)
+check_culture('the same culture: Ogres', 'wh3_main_ogr_ogre_kingdoms', 'wh3_main_ogr_ogre_kingdoms', false)
+
+do
+    local result = play({ last_turn = 1, ai_culture = 'unknown_culture' })
+    check('an unknown culture is logged', result.errors:find('unknown_culture', 1, true) ~= nil, result.errors)
+    check('an unknown culture still gets bonuses', result.gold_count > 0, result.gold_count)
+end
+
+print('-- effect bundles')
+
+do
+    local result = play({ last_turn = 41 })
+    local expected = {
+        [8] = 'none',
+        [9] = 'none',
+        [10] = 'af_armageddon_effect_bundle_ai_buff_1',
+        [19] = 'af_armageddon_effect_bundle_ai_buff_1',
+        [20] = 'af_armageddon_effect_bundle_ai_buff_2',
+        [30] = 'af_armageddon_effect_bundle_ai_buff_3',
+        [35] = 'af_armageddon_effect_bundle_ai_buff_4',
+        [39] = 'af_armageddon_effect_bundle_ai_buff_4',
+        [40] = 'af_armageddon_effect_bundle_ai_buff_5',
+        [41] = 'af_armageddon_effect_bundle_ai_buff_5'
+    }
+
+    for turn = 1, 41 do
+        if expected[turn] then
+            local bundle = result.bundles[turn] or 'none'
+            check('the bundle of turn ' .. turn, bundle == expected[turn], bundle)
+        end
+    end
+
+    local active = {}
+    for key in pairs(result.active_bundles) do active[#active + 1] = key end
+    check('only the last bundle stays active',
+        #active == 1 and active[1] == 'af_armageddon_effect_bundle_ai_buff_5', table.concat(active, ','))
+end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))
 os.exit(failed == 0 and 0 or 1)

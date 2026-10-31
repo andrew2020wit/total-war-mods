@@ -294,38 +294,3 @@ core:add_listener(
     help_ai_each_turn,
     true
 )
-
--- test ========================================
-
-local function test_culture_group(culture_a, culture_b, true_result)
-    local same = the_same_culture_group(culture_a, culture_b)
-
-    local is_ok = same == true_result
-
-    local result = 'Ok'
-
-    if not is_ok then
-        result = 'Test error!'
-    end
-
-    log_errors(result .. ' test_culture_group: ' .. culture_a .. ', ' .. culture_b .. ', result: ' .. tostring(same))
-end
-
-local function test_culture()
-    log_errors('Test, v' .. mod_version)
-    test_culture_group("wh_main_chs_chaos", "wh3_main_kho_khorne", true)
-    test_culture_group("wh2_main_hef_high_elves", "wh2_dlc09_tmb_tomb_kings", false)
-    test_culture_group("wh3_main_ogr_ogre_kingdoms", "wh3_main_ogr_ogre_kingdoms", true)
-end
-
-local function test()
-    log_errors('Test, v' .. mod_version)
-    log_errors('Effect Bonus bundle, 40 turn: ' .. tostring(get_current_bundle_key(40)))
-    log_errors('Effect Bonus bundle, 39 turn: ' .. tostring(get_current_bundle_key(39)))
-    log_errors('Effect Bonus bundle, 41 turn: ' .. tostring(get_current_bundle_key(41)))
-    log_errors('Effect Bonus bundle, 20 turn: ' .. tostring(get_current_bundle_key(20)))
-    log_errors('Effect Bonus bundle, 8 turn: ' .. tostring(get_current_bundle_key(8)))
-    log_errors('Effect Bonus bundle, 10 turn: ' .. tostring(get_current_bundle_key(10)))
-end
-
--- test()

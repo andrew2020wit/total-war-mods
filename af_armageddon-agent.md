@@ -82,29 +82,26 @@ edited since.)
   the root `readme.md` when behavior changes.
 - Logging is file-based, written into the game folder (relative `io.open`, no path):
   - `!!af_armageddon.txt` — normal run log, gated by `settings.enable_logging`.
-  - `!!af_armageddon-errors.txt` — error/self-test log, always written (used e.g. when a
-    faction's culture isn't found in `culture_group_ids`).
+  - `!!af_armageddon-errors.txt` — error log, always written (used e.g. when a faction's
+    culture isn't found in `culture_group_ids`).
 - `culture_group_ids` is built once at load time by flattening `culture_groups`; when adding
   a new faction/subculture (e.g. a new DLC race), add its culture key to the correct group
   in `culture_groups`, not to `culture_group_ids` directly.
 - `the_same_culture_group` logs to the error file (not a crash) when a culture key is
   missing from `culture_group_ids` — treat that log as "a faction culture is missing from
   `culture_groups` and needs to be added".
-- There are ad-hoc self-test functions at the bottom of the file (`test_culture`, `test`)
-  guarded behind a commented-out `-- test()` call. Uncomment temporarily to sanity-check
-  culture-group logic or bundle-turn thresholds after editing, then comment it back out
-  before packing/releasing.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
 
 ## Tests
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
-For now it covers the unit XP: when it's added and which units and factions get it. It runs
-the real script against a small model of the game and changes the `settings` in the text of
-the script, because they're a local table. It doesn't talk to the real game, so what the game
-itself answers still needs a run in the game. Run it after changing the script, and extend it
-with the change.
+It covers the unit XP (when it's added and which units and factions get it), the culture
+groups and the effect bundle of each turn. It runs the real script against a small model of
+the game and changes the `settings` in the text of the script, because they're a local table.
+The local functions of the script aren't reachable, so it checks what they lead to: the calls
+to the game. It doesn't talk to the real game, so what the game itself answers still needs a
+run in the game. Run it after changing the script, and extend it with the change.
 
 It needs any Lua 5.4. The one inside the VS Code Lua extension will do. Run it from the
 repository root, it prints `ALL PASSED` at the end:
