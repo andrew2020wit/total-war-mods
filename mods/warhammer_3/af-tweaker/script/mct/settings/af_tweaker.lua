@@ -26,6 +26,14 @@ min_treasury:slider_set_step_size(1000)
 min_treasury:set_default_value(5000)
 min_treasury:set_is_global(true)
 
+mct_mod:add_new_section("favorite_buildings", "Favorite buildings")
+
+local favorites = mct_mod:add_new_option("favorite_buildings", "text_input")
+favorites:set_text("Favorite building keys")
+favorites:set_tooltip_text("Keys of first-level buildings, separated by commas. At the start of your turn they are built in free slots, in this order. The minimum treasury applies.")
+favorites:set_default_value("")
+favorites:set_is_global(true)
+
 mct_mod:add_new_section("debug", "Debug")
 
 local logging = mct_mod:add_new_option("enable_logging", "checkbox")

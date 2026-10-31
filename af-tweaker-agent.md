@@ -8,22 +8,36 @@ Not published on the Steam Workshop yet. First in-game run was on 2026-10-31 —
 
 ## What the mod does
 
-### Automatic building upgrades
-
-At the start of the player's turn the mod queues every building upgrade it can pay for,
-spending only the money above a minimum the player sets:
-
-1. `budget = treasury - min_treasury`. If the budget isn't positive, nothing happens.
-2. Walk the player's regions and their building slots.
-3. For each upgradable building, compare the cost with the budget. If it fits, queue the
-   upgrade and subtract the cost from the budget; if not, move on to the next building (a
-   cheaper one may still fit).
-4. Stop when the budget runs out.
-5. Log the result of the cycle: the budget at the start, the number of buildings upgraded,
-   the total spent and the budget at the end.
+At the start of the player's turn the mod spends the money above a minimum the player sets
+(`budget = treasury - min_treasury`). Favorite buildings go first, upgrades get what's left.
+Each pass stops when the budget runs out. At the end the cycle is logged: the budget at the
+start, the numbers of favorites built and buildings upgraded, the total spent and the
+budget at the end.
 
 The budget is tracked in the script because commands are asynchronous: `faction:treasury()`
 doesn't change during the loop, so re-reading it would overspend.
+
+### Favorite buildings
+
+The player lists building keys in the settings. For each free slot of each settlement, the
+mod takes the first listed building that can be built there and that fits the budget.
+
+- The keys are building level keys and must be the level that can be built from an empty
+  slot, normally `_1` (`wh_main_vmp_cemetary_1`, not `wh_main_vmp_cemetary_3`). Later levels
+  are the job of the upgrades.
+- Commas, semicolons and spaces all separate keys. Unknown keys are logged and ignored.
+- Which building can go where is decided with the same checks as the construction popup:
+  `PossibleBuildingChainsList`, `IsActiveForBuildingBrowser`, `DoesBuildingExceedCap`,
+  `IsEpisodicRestricted`, `BuildingCanEverBeBuilt`.
+- A key is built at most once per settlement per cycle, because the game doesn't see a
+  queued building until the command is processed. The building cap across settlements has
+  the same blind spot: if the game refuses such a command, the budget of that cycle is
+  simply reduced by a building that wasn't built.
+
+### Automatic building upgrades
+
+For each upgradable building, the cost is compared with the budget. If it fits, the upgrade
+is queued; if not, the mod moves on to the next building (a cheaper one may still fit).
 
 A building is skipped when:
 - the settlement is under siege;
@@ -48,7 +62,8 @@ defaults from the `settings` table in the script.
 | Option                 | Type     | Default | Meaning                                     |
 |------------------------|----------|--------:|---------------------------------------------|
 | `auto_upgrade_enabled` | checkbox | `true`  | Turns the automatic upgrades on             |
-| `min_treasury`         | slider   | `5000`  | Money that automatic upgrades never touch   |
+| `min_treasury`         | slider   | `5000`  | Money the mod never touches                 |
+| `favorite_buildings`   | text     | empty   | Keys of favorite buildings; empty turns the feature off |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -100,7 +115,9 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Region cqi as the `CcoCampaignSettlement` id, reading slots, keys and costs from Lua | Works: 21 upgrades logged on turn 45 of a Vampire Counts campaign |
 | The `0.5` s delay after `FactionTurnStart`                           | Works in that run              |
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
-| Settings window, `enable_logging`                                    | **Not tested in the game**     |
+| Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
+| Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
+| `favorite_buildings` text box: long lists                            | **Not tested in the game**     |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.
@@ -135,8 +152,8 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
   `Name` on `CcoCampaignSettlement`.
 - The start line of the log is written on the first tick, not at load time: the MCT settings
   may not be loaded yet when the script file runs.
-- A new tweak gets its own section in the MCT file with an on/off option, and its own
-  section in this guide.
+- A new tweak gets its own section in the MCT file with a way to turn it off (a checkbox or
+  an empty list), and its own section in this guide.
 - `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
   must only define settings; `cm` isn't available there.
 - Keep `mod_version` in sync with [changelog.txt](changelog.txt) and [readme.md](readme.md)

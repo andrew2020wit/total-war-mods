@@ -1,14 +1,15 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.1.4'
+local mod_version = '0.2.0'
 
 local mct_mod_key = 'af_tweaker'
 
--- enable_logging, auto_upgrade_enabled and min_treasury are defaults, used when MCT is not installed
+-- All values except turn_start_delay are defaults, used when MCT is not installed
 local settings = {
     enable_logging = false,
     auto_upgrade_enabled = true,
+    favorite_buildings = '',
     min_treasury = 5000,
     turn_start_delay = 0.5
 }
@@ -135,9 +136,8 @@ local function find_upgrade_key(level_key)
     return upgrade_key
 end
 
-local function is_level_available(region, region_cqi, slot_index, level_key)
+local function is_level_available(region, region_cqi, slot_index, level)
     local slot = slot_expression(slot_index)
-    local level = level_expression(slot_index, level_key)
 
     local available = get_value(region_cqi, level .. '.IsLockedByAnyTech == false'
         .. ' && ' .. level .. '.IsLockedByLevel(' .. slot .. ') == false'
@@ -156,6 +156,40 @@ local function is_level_available(region, region_cqi, slot_index, level_key)
     end
 
     return true
+end
+
+-- Returns the cost if the building was queued
+local function queue_level(region, region_cqi, slot_index, level, level_key, cycle)
+    if not is_level_available(region, region_cqi, slot_index, level) then
+        return nil
+    end
+
+    local cost = get_value(region_cqi, level .. '.CreateCost(this)')
+
+    if not cost then
+        log_errors('Building cost not found: ' .. level_key)
+        return nil
+    end
+
+    if cost > cycle.budget then
+        return nil
+    end
+
+    common.call_context_command(settlement_context, region_cqi,
+        level .. '.IssueCommandForBuildingBrowser(' .. slot_expression(slot_index) .. ')'
+    )
+
+    cycle.budget = cycle.budget - cost
+    cycle.spent = cycle.spent + cost
+
+    return cost
+end
+
+local function log_queued(text, region, cost, cycle)
+    log(text .. ', region: ' .. region_title(region)
+        .. ', cost: ' .. tostring(cost)
+        .. ', budget: ' .. tostring(cycle.budget + cost) .. ' => ' .. tostring(cycle.budget)
+    )
 end
 
 local function upgrade_slot(region, region_cqi, slot_index, cycle)
@@ -178,39 +212,84 @@ local function upgrade_slot(region, region_cqi, slot_index, cycle)
         return
     end
 
-    if not is_level_available(region, region_cqi, slot_index, upgrade_key) then
-        return
-    end
-
     local level = level_expression(slot_index, upgrade_key)
-    local cost = get_value(region_cqi, level .. '.CreateCost(this)')
+    local cost = queue_level(region, region_cqi, slot_index, level, upgrade_key, cycle)
 
     if not cost then
-        log_errors('Building cost not found: ' .. upgrade_key)
         return
     end
 
-    if cost > cycle.budget then
-        return
-    end
-
-    common.call_context_command(settlement_context, region_cqi,
-        level .. '.IssueCommandForBuildingBrowser(' .. slot_expression(slot_index) .. ')'
-    )
-
-    local budget_before = cycle.budget
-
-    cycle.budget = budget_before - cost
-    cycle.spent = cycle.spent + cost
     cycle.upgraded = cycle.upgraded + 1
 
-    log('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key)
-        .. ', region: ' .. region_title(region)
-        .. ', cost: ' .. tostring(cost) .. ', budget: ' .. tostring(budget_before) .. ' => ' .. tostring(cycle.budget)
+    log_queued('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key), region, cost, cycle)
+end
+
+local function parse_favorites(text)
+    local favorites = {}
+
+    for key in string.gmatch(text, '[^%s,;]+') do
+        if common.get_context_value('CcoBuildingLevelRecord', key, 'Key') == key then
+            table.insert(favorites, key)
+        else
+            log('unknown favorite building: ' .. key)
+        end
+    end
+
+    return favorites
+end
+
+local function is_slot_free(region_cqi, slot_index)
+    local slot = slot_expression(slot_index)
+
+    return get_value(region_cqi, slot .. '.IsEmpty && ' .. slot .. '.ShouldShowSlot'
+        .. ' && IsContextValid(' .. slot .. '.ConstructionItemContext) == false'
     )
 end
 
-local function upgrade_region(region, cycle)
+local function favorite_expression(slot_index, level_key)
+    return slot_expression(slot_index)
+        .. '.PossibleBuildingChainsList.FirstContext(LevelsList.Any(Key == "' .. level_key .. '"))'
+        .. '.LevelsList.FirstContext(Key == "' .. level_key .. '")'
+end
+
+-- The same checks that make a building clickable in the construction popup
+local function is_favorite_buildable(region_cqi, slot_index, level)
+    local slot = slot_expression(slot_index)
+
+    if not get_value(region_cqi, 'IsContextValid(' .. level .. ')') then
+        return false
+    end
+
+    return get_value(region_cqi, level .. '.IsActiveForBuildingBrowser(' .. slot .. ')'
+        .. ' && ' .. level .. '.DoesBuildingExceedCap(' .. slot .. ') == false'
+        .. ' && ' .. level .. '.IsEpisodicRestricted(' .. slot .. ') == false'
+        .. ' && this.BuildingCanEverBeBuilt(' .. level .. ', ' .. slot .. ')'
+    )
+end
+
+local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, built_in_region)
+    if not is_slot_free(region_cqi, slot_index) then
+        return
+    end
+
+    for _, level_key in ipairs(cycle.favorites) do
+        local level = favorite_expression(slot_index, level_key)
+
+        if not built_in_region[level_key] and is_favorite_buildable(region_cqi, slot_index, level) then
+            local cost = queue_level(region, region_cqi, slot_index, level, level_key, cycle)
+
+            if cost then
+                built_in_region[level_key] = true
+                cycle.built = cycle.built + 1
+
+                log_queued('favorite ' .. building_title(level_key), region, cost, cycle)
+                return
+            end
+        end
+    end
+end
+
+local function for_each_slot(region, cycle, handler)
     if region:garrison_residence():is_under_siege() then
         return
     end
@@ -228,22 +307,11 @@ local function upgrade_region(region, cycle)
             break
         end
 
-        upgrade_slot(region, region_cqi, slot_index, cycle)
+        handler(region, region_cqi, slot_index, cycle)
     end
 end
 
--- The treasury is read once: commands are asynchronous, it doesn't change during this loop.
-local function upgrade_buildings(faction_name)
-    local faction = cm:get_faction(faction_name)
-    local min_treasury = get_setting('min_treasury')
-    local treasury = faction:treasury()
-    local budget = treasury - min_treasury
-    local cycle = { budget = budget, spent = 0, upgraded = 0 }
-
-    log('auto upgrade, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
-        .. ', min_treasury: ' .. tostring(min_treasury) .. ', budget: ' .. tostring(budget)
-    )
-
+local function for_each_region(faction, cycle, region_handler)
     local region_list = faction:region_list()
 
     for i = 0, region_list:num_items() - 1 do
@@ -251,10 +319,49 @@ local function upgrade_buildings(faction_name)
             break
         end
 
-        upgrade_region(region_list:item_at(i), cycle)
+        region_handler(region_list:item_at(i))
+    end
+end
+
+local function build_favorites(faction, cycle)
+    for_each_region(faction, cycle, function(region)
+        -- Commands are asynchronous, the game doesn't see this region's new buildings yet
+        local built_in_region = {}
+
+        for_each_slot(region, cycle, function(_, region_cqi, slot_index)
+            build_favorite_in_slot(region, region_cqi, slot_index, cycle, built_in_region)
+        end)
+    end)
+end
+
+local function upgrade_buildings(faction, cycle)
+    for_each_region(faction, cycle, function(region)
+        for_each_slot(region, cycle, upgrade_slot)
+    end)
+end
+
+-- The treasury is read once: commands are asynchronous, it doesn't change during this loop.
+local function run_turn_start_cycle(faction_name)
+    local faction = cm:get_faction(faction_name)
+    local min_treasury = get_setting('min_treasury')
+    local treasury = faction:treasury()
+    local budget = treasury - min_treasury
+    local cycle = { budget = budget, spent = 0, upgraded = 0, built = 0, favorites = parse_favorites(get_setting('favorite_buildings')) }
+
+    log('auto build, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
+        .. ', min_treasury: ' .. tostring(min_treasury) .. ', budget: ' .. tostring(budget)
+    )
+
+    if #cycle.favorites > 0 then
+        build_favorites(faction, cycle)
     end
 
-    log('auto upgrade done, budget at start: ' .. tostring(budget)
+    if get_setting('auto_upgrade_enabled') then
+        upgrade_buildings(faction, cycle)
+    end
+
+    log('auto build done, budget at start: ' .. tostring(budget)
+        .. ', favorite buildings built: ' .. tostring(cycle.built)
         .. ', buildings upgraded: ' .. tostring(cycle.upgraded)
         .. ', total spent: ' .. tostring(cycle.spent)
         .. ', budget at end: ' .. tostring(cycle.budget)
@@ -262,7 +369,7 @@ local function upgrade_buildings(faction_name)
 end
 
 local function on_player_turn_start(context)
-    if not get_setting('auto_upgrade_enabled') then
+    if not get_setting('auto_upgrade_enabled') and get_setting('favorite_buildings') == '' then
         return
     end
 
@@ -274,10 +381,10 @@ local function on_player_turn_start(context)
     end
 
     cm:callback(function()
-        local is_ok, error_text = pcall(upgrade_buildings, faction_name)
+        local is_ok, error_text = pcall(run_turn_start_cycle, faction_name)
 
         if not is_ok then
-            log_errors('upgrade_buildings: ' .. tostring(error_text))
+            log_errors('run_turn_start_cycle: ' .. tostring(error_text))
         end
     end, settings.turn_start_delay)
 end
