@@ -1,4 +1,4 @@
-2026.10.31 v9.1.2: in multiplayer the mod uses the default settings and the first player of the campaign, so the bonuses are the same on all machines; two cultures missing from the culture groups no longer count as one group
+2026.10.31 v9.1.2: multiplayer isn't supported, but there the mod now uses the default settings and the first player of the campaign to lower the risk of a desync; two cultures missing from the culture groups no longer count as one group
 2026.10.31 v9.1.1: settings window in Mod Configuration Tool (optional, global settings), the log file is off by default
 2026.10.31 v9.0.2: unit experience: the start turn and the turn interval are now settings, by default it is added every turn from turn 10; character experience: the start turn is now a setting, by default turn 10; new settings bonus_for_same_culture and bonus_for_same_culture_group give the bonuses to the culture and to the culture group of the player, by default they are off
 2026.09.26 v9.0.1: add wh3_dlc29_nag_undead_legions and wh3_main_pro_ksl_kislev to culture_groups (WH3 v9 compatibility check)

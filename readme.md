@@ -15,13 +15,14 @@ It was created to be used with Radious mod, but it's also compatible with any ot
 Mod order doesn't matter.
 You can add it during a campaign. Don't remove it then.
 
+The mod is made for single player campaigns. It isn't designed for multiplayer and doesn't
+support it.
+
 ### Settings
 
 The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
 (MCT). It's optional: without it the mod works with the default settings.
 The settings are global: one set of values for all campaigns.
-In multiplayer the mod always uses the default settings, and "the player" is the first player
-of the campaign.
 
 - who gets the bonuses: AI factions of your culture and of your culture group can get them too;
 - gold: the percent of the AI income per player region and per turn;

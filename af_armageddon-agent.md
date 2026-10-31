@@ -16,6 +16,9 @@ the campaign (later turns / more player regions → bigger bonus). It is meant t
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
 
+**Multiplayer isn't supported.** The mod is designed for a single player campaign: the rules
+know one player, and it has never been run in a multiplayer campaign.
+
 Bonuses applied per eligible AI faction turn:
 - **Treasury gold** — proportional to the AI faction's own income, scaled by current
   turn number and by the player's region count (see `settings.time_percent` /
@@ -93,9 +96,10 @@ them as soon as they're saved in its window, so a change applies from the next f
 All options are global (`set_is_global(true)`): one value for all campaigns. New options must
 set it too.
 
-In multiplayer `get_setting` ignores MCT and returns the defaults: each player has their own
-values of global options, and different bonuses on two machines would be a desync. For the
-same reason "the player" of the culture check and of the region count is the first faction of
+Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
+the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
+and returns the defaults, as each player has their own values of global options, and "the
+player" of the culture check and of the region count is the first faction of
 `cm:get_human_factions()`, not the local one. It's the same faction in single player.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
