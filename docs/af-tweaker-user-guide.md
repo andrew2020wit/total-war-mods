@@ -33,7 +33,8 @@ The version of the mod is shown in its title.
 | Spend skill points at the start of the turn | **Off** | Spends skill points and shows the priority stars |
 | Write a log file | Off | Writes a log, useful for finding problems |
 
-The settings are the same for all your campaigns. A change takes effect from your next turn.
+The settings are the same for all your campaigns. A change takes effect from your next turn,
+except for the priority stars, which appear right away.
 
 ## Minimum treasury
 
@@ -53,7 +54,12 @@ A building is left alone when:
 - it's already being built or upgraded;
 - the upgrade needs a technology or a higher settlement level;
 - the upgrade costs something other than gold that you can't pay;
+- the upgrade needs a development point and the province has none. Only one such building is
+  queued per province per turn;
 - it can be upgraded in several different ways. This choice is yours, so make it yourself.
+
+Buildings that cost a pooled resource, such as the raw materials of the Chaos Dwarfs, are queued
+one per turn.
 
 ## Favorite buildings
 
@@ -78,7 +84,8 @@ demolish button. The star lights up. Click it again to remove the building from 
 ![Priority stars in the skill tree](../imgs/tweaker/skills.png)
 
 This feature is off by default. When it's on, your characters spend all their available skill
-points at the start of your turn.
+points at the start of your turn. Points go one at a time, so with many unspent points it can
+take a few seconds. Let it finish before you open a character's skill panel.
 
 Each skill card in the character panel gets a small star above it. Click it to set a priority:
 
@@ -97,13 +104,18 @@ skills without a priority, in the order of the skill tree.
 - A skill with several levels gets several points, up to its maximum.
 - Locked skills are skipped, and points aren't saved for them, even if the skill has a high
   priority. Points go to whatever can be bought now.
-- A skill unlocked by this turn's points gets its points next turn.
+- A skill unlocked by a point gets its share of the remaining points in the same turn, and a
+  skill locked by a point is skipped.
 - Wounded characters are skipped.
-- It works separately from the game's own auto-management of skills.
+- Keep the game's own automatic level-up (auto-management of skills) off for the characters
+  you want this feature to handle. The game spends the points at the end of your turn, before
+  this feature gets to them at the start of the next one, so your priorities are never used.
 
-> **Before you turn this on:** on your next turn every character will spend all their
-> unspent points, including on skills without a priority. Set the priorities for your important
-> characters first, and make a save. The only way to undo a choice is the game's skill reset.
+> **Before your next turn:** the stars appear only while this option is on, and the points are
+> spent at the start of your next turn. So turn the option on, set the priorities for your
+> important characters in the same turn, make a save, and only then end the turn. Every
+> character will spend all their unspent points, including on skills without a priority. The
+> only way to undo a choice is the game's skill reset.
 
 ## Compatibility with other mods
 

@@ -34,7 +34,8 @@ The button:
   whole UI, but version 0.3.2 with that call crashed the game seconds after a click on a
   settlement, with no Lua error and a native stack, and no vanilla script uses it.
 - Don't keep a uicomponent between timer ticks: the game may have destroyed it by then. Every
-  poll finds everything anew. An error stops the polling and goes to the error log.
+  poll finds everything anew. An error stops only the step that failed, the star or the skill
+  buttons, and goes to the error log.
 - The popup comes from the `mouseover` property of `settlement_building_slot`
   (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's looked up by
   name with the recursive `Find`, inside the slot first and then in the whole UI. Don't use a
@@ -46,7 +47,9 @@ The button:
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
-- A click applies to the last building the button was shown for.
+- A click applies to the last building the button was shown for. While the mouse crosses
+  another slot the old popup can still be open, so the key changes only when the context of
+  `options_list` is the hovered slot, or when it has no such context.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
 - The icon goes on image index 0 of the template, which shows it at 38x38 in every state. So
@@ -70,6 +73,12 @@ The list:
   queued building until the command is processed. The building cap across settlements has
   the same blind spot: if the game refuses such a command, the budget of that cycle is
   simply reduced by a building that wasn't built.
+- Development points and pooled resources have the same blind spot, and only gold is counted
+  in the script. So a cycle queues one building with a development point cost per province
+  and one building with a pooled resource cost per faction (555 vanilla levels, the raw
+  materials of the Chaos Dwarfs first of all). The rest wait for the next turn. The check for a
+  pooled cost comes from `dlc29_vmp_vampire_lair_popup.twui.xml`:
+  `IsContextValid(cost) && cost.PooledResourceTransactionList.IsEmpty == false`.
 
 ### Automatic character skills
 
@@ -90,12 +99,22 @@ while something can be bought.
 - A point is added with `AddPoint` on the skill and applied with `CommitSkillChoices` on the
   character: the same steps as clicking a card and closing the panel, so the game charges
   the points. Don't use `cm:force_add_skill`: nothing confirms that it charges them.
-- Commands are asynchronous, so the points added to a skill are counted in the script, and
-  there's one commit per character. A skill unlocked by that commit waits for the next turn.
+- Points go in rounds: one point and one commit per character, then `skill_round_delay`
+  (0.5 s) before the next round. Commands are asynchronous, so several points in one commit
+  would be chosen from stale data. Skills lock each other a lot
+  (`character_skill_nodes_skill_locks` has 2694 vanilla rows), no CCO function shows these
+  locks, and the rank of a later level would go unchecked. The next round reads `Status`,
+  `Level` and `NextLevelContext` after the commit, so all of this comes from the game itself.
+- A character whose `SkillPointsAvailable` didn't go down between rounds drops out until the
+  next turn, with `skill point not charged` in the log. So a refused command can't loop, and a
+  slow commit can't lead to a choice from stale data.
+- The rounds stop when the turn ends (`is_factions_turn`). The rest of the points wait for the
+  next turn.
 - Locked skills are just skipped, points aren't saved for them, and their parents aren't
   prioritized.
 - It's independent from the game's own auto management (`AutoManagementContext`), which works
-  at the end of the turn, so `IsAutoManaging` isn't checked. Wounded characters are skipped.
+  at the end of the turn, so `IsAutoManaging` isn't checked. The game spends the points first
+  on such characters, so the user guide says to keep it off. Wounded characters are skipped.
 
 The priority button:
 - With the feature on, the poll finds the visible `character_details_panel_skills` and walks
@@ -128,7 +147,9 @@ A building is skipped when:
 - the slot is empty, already constructing, or is a lifecycle building;
 - the upgrade is locked by a technology or by the settlement level;
 - its non-gold resource cost can't be paid;
-- it needs development points the region doesn't have;
+- it needs development points the region doesn't have, or its province already got such a
+  building this cycle;
+- it has a pooled resource cost and another such building was queued this cycle;
 - it has several upgrades inside its chain. That's the player's choice, so it's logged and
   left alone. Upgrades that lead into another chain (for example Cathay's yin/yang pairs)
   are ignored, and the building stays on its current chain.
@@ -214,12 +235,16 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 | Auto skills: `Status` values                                         | Read from the log of 0.4.3     |
 | Auto skills: `AddPoint`, `CommitSkillChoices`, priorities            | Work in 0.4.4: 78 points on 22 characters in one cycle, confirmed by the user in the game |
+| Auto skills in rounds: the commit is done within `skill_round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
+| One building per cycle for development points and pooled resources   | **Not tested in the game** (0.4.5) |
+| Star button: the context of `options_list` is the slot               | **Not tested in the game** (0.4.5), the button works as before if there's no context |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
-queue on the map.
+queue on the map; with 0.4.5, check that no `skill point not charged` lines appear for
+characters with several points, and that a pair of locked skills gets only one point.
 
 ## Repository layout
 
@@ -250,6 +275,8 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
 - Logs are written to the game folder: `!!af_tweaker.txt` (gated by the `enable_logging`
   option, off by default) and `!!af_tweaker-errors.txt` (always written). UI listeners go
   through `with_error_log`, since their errors are otherwise lost.
+- Check `is_logging_enabled()` before a log line whose text takes context queries: `log`
+  checks it too, but only after the arguments were already evaluated.
 - Log lines show the in-game name in the game's language next to the key, like
   `Name (key)`. The key alone means the game returned no name: building names come from
   `PlayerVariantRecordContext.Name` on `CcoBuildingLevelRecord`, settlement names from

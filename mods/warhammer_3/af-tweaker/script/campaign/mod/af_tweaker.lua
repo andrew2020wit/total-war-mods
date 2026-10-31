@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.4.4'
+local mod_version = '0.4.5'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -13,6 +13,7 @@ local settings = {
     auto_skills_enabled = false,
     min_treasury = 5000,
     turn_start_delay = 0.5,
+    skill_round_delay = 0.5,
     ui_poll_ms = 250
 }
 
@@ -23,7 +24,6 @@ local slot_context = 'CcoCampaignBuildingSlot'
 local favorites_file_name = '!!af_tweaker-favorites.txt'
 local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
-local ui_poll_name = 'af_tweaker_ui_poll'
 local favorite_button_template = 'ui/templates/round_small_button_toggle'
 local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
 
@@ -69,8 +69,13 @@ local function get_setting(option_key)
     return value
 end
 
+-- Call sites check it first when building the text takes context queries
+local function is_logging_enabled()
+    return get_setting('enable_logging')
+end
+
 local function log(text)
-    if not get_setting('enable_logging') then
+    if not is_logging_enabled() then
         return
     end
 
@@ -161,7 +166,24 @@ local function find_upgrade_key(level_key)
     return upgrade_key
 end
 
-local function is_level_available(region, region_cqi, slot_index, level)
+local function uses_development_points(region_cqi, level)
+    local development_points = get_value(region_cqi, level .. '.DevelopmentPointCost(this)')
+
+    return development_points ~= nil and development_points > 0
+end
+
+local function uses_pooled_resources(region_cqi, slot_index, level)
+    local cost = level .. '.ResourceCostContext(' .. slot_expression(slot_index) .. ')'
+
+    return get_value(region_cqi, 'IsContextValid(' .. cost .. ')'
+        .. ' && ' .. cost .. '.PooledResourceTransactionList.IsEmpty == false'
+    )
+end
+
+-- The game checks development points and pooled resources against what it has now, and
+-- commands are asynchronous. Only gold is counted in the script, so the others get one
+-- building per cycle: per province for development points, per faction for resources.
+local function is_level_available(region, region_cqi, slot_index, level, cycle)
     local slot = slot_expression(slot_index)
 
     local available = get_value(region_cqi, level .. '.IsLockedByAnyTech == false'
@@ -174,18 +196,21 @@ local function is_level_available(region, region_cqi, slot_index, level)
         return false
     end
 
-    local development_points = get_value(region_cqi, level .. '.DevelopmentPointCost(this)')
-
-    if development_points and development_points > 0 then
-        return region:has_development_points_to_upgrade()
+    if cycle.pooled_resources_used and uses_pooled_resources(region_cqi, slot_index, level) then
+        return false
     end
 
-    return true
+    if not uses_development_points(region_cqi, level) then
+        return true
+    end
+
+    return not cycle.development_provinces[region:province_name()]
+        and region:has_development_points_to_upgrade()
 end
 
 -- Returns the cost if the building was queued
 local function queue_level(region, region_cqi, slot_index, level, level_key, cycle)
-    if not is_level_available(region, region_cqi, slot_index, level) then
+    if not is_level_available(region, region_cqi, slot_index, level, cycle) then
         return nil
     end
 
@@ -206,6 +231,14 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
 
     cycle.budget = cycle.budget - cost
     cycle.spent = cycle.spent + cost
+
+    if uses_pooled_resources(region_cqi, slot_index, level) then
+        cycle.pooled_resources_used = true
+    end
+
+    if uses_development_points(region_cqi, level) then
+        cycle.development_provinces[region:province_name()] = true
+    end
 
     return cost
 end
@@ -246,7 +279,9 @@ local function upgrade_slot(region, region_cqi, slot_index, cycle)
 
     cycle.upgraded = cycle.upgraded + 1
 
-    log_queued('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key), region, cost, cycle)
+    if is_logging_enabled() then
+        log_queued('upgrade ' .. building_title(level_key) .. ' => ' .. building_title(upgrade_key), region, cost, cycle)
+    end
 end
 
 local function load_favorites()
@@ -359,7 +394,10 @@ local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, bui
                 built_in_region[level_key] = true
                 cycle.built = cycle.built + 1
 
-                log_queued('favorite ' .. building_title(level_key), region, cost, cycle)
+                if is_logging_enabled() then
+                    log_queued('favorite ' .. building_title(level_key), region, cost, cycle)
+                end
+
                 return
             end
         end
@@ -423,7 +461,15 @@ local function run_turn_start_cycle(faction_name)
     local min_treasury = get_setting('min_treasury')
     local treasury = faction:treasury()
     local budget = treasury - min_treasury
-    local cycle = { budget = budget, spent = 0, upgraded = 0, built = 0, favorites = {} }
+    local cycle = {
+        budget = budget,
+        spent = 0,
+        upgraded = 0,
+        built = 0,
+        favorites = {},
+        development_provinces = {},
+        pooled_resources_used = false
+    }
 
     log('auto build, turn: ' .. tostring(cm:turn_number()) .. ', treasury: ' .. tostring(treasury)
         .. ', min_treasury: ' .. tostring(min_treasury) .. ', budget: ' .. tostring(budget)
@@ -458,7 +504,10 @@ local function load_skill_priorities()
         local key, priority = string.match(line, '^%s*(.-)%s*=%s*(%d+)%s*$')
 
         if key then
-            skill_priorities[key] = tonumber(priority)
+            -- The file can be edited by hand, and an icon exists only for the valid values
+            local value = math.min(tonumber(priority), skill_max_priority)
+
+            skill_priorities[key] = value > 0 and value or nil
         end
     end
 
@@ -498,38 +547,40 @@ end
 
 -- The game reports active, inactive (a parent skill is missing) and locked_due_to_rank.
 -- Fully levelled skills are active too, and the next level can need a higher rank.
-local function can_add_skill_point(character_cqi, skill_index, added_points)
+local function can_add_skill_point(character_cqi, skill_index)
     local skill = skill_expression(skill_index)
 
-    local is_open = get_character_value(character_cqi, skill .. '.Status == "active"'
+    return get_character_value(character_cqi, skill .. '.Status == "active"'
         .. ' && ' .. skill .. '.IsBackgroundSkill == false'
+        .. ' && ' .. skill .. '.Level < ' .. skill .. '.TotalLevels'
         .. ' && IsContextValid(' .. skill .. '.NextLevelContext)'
         .. ' && ' .. skill .. '.NextLevelContext.RankRequired <= Rank'
     )
+end
 
-    if not is_open then
-        return false
+-- The keys don't change during a turn, unlike the rest of the skill data
+local function get_skill_keys(character_cqi)
+    local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
+    local skill_keys = {}
+
+    for skill_index = 0, skill_number - 1 do
+        skill_keys[skill_index + 1] = get_character_value(character_cqi, skill_expression(skill_index) .. '.Key') or ''
     end
 
-    local level = get_character_value(character_cqi, skill .. '.Level') or 0
-    local total_levels = get_character_value(character_cqi, skill .. '.TotalLevels') or 0
-
-    return level + added_points < total_levels
+    return skill_keys
 end
 
 -- Skills without a priority go last. Equal priorities go in the order of the skill tree.
-local function find_next_skill(character_cqi, added_points)
-    local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
+local function find_next_skill(character_cqi, skill_keys)
     local best_index = nil
     local best_key = nil
     local best_priority = -1
 
-    for skill_index = 0, skill_number - 1 do
-        local key = get_character_value(character_cqi, skill_expression(skill_index) .. '.Key')
+    for position, key in ipairs(skill_keys) do
+        local skill_index = position - 1
         local priority = skill_priorities[key] or 0
 
-        if key and priority > best_priority
-            and can_add_skill_point(character_cqi, skill_index, added_points[key] or 0) then
+        if priority > best_priority and can_add_skill_point(character_cqi, skill_index) then
             best_index = skill_index
             best_key = key
             best_priority = priority
@@ -562,64 +613,96 @@ local function log_skill_statuses(character_cqi, points)
     )
 end
 
--- Points are added like clicks on the skill cards and committed like closing the panel, so
--- the game charges them. Commands are asynchronous: the points of a skill are counted here,
--- and a skill unlocked by this commit waits for the next turn.
-local function spend_skill_points(character_cqi)
-    local points = get_character_value(character_cqi, 'SkillPointsAvailable') or 0
-    local added_points = {}
-    local spent = 0
+-- The point is added like a click on the skill card and committed like closing the panel,
+-- so the game charges it. Returns true if a skill was found.
+local function spend_skill_point(character_cqi, skill_keys, points)
+    local skill_index, key, priority = find_next_skill(character_cqi, skill_keys)
 
-    for _ = 1, points do
-        local skill_index, key, priority = find_next_skill(character_cqi, added_points)
-
-        if not skill_index then
-            break
+    if not skill_index then
+        if is_logging_enabled() then
+            log_skill_statuses(character_cqi, points)
         end
 
-        common.call_context_command(character_context, character_cqi, skill_expression(skill_index) .. '.AddPoint')
+        return false
+    end
 
-        added_points[key] = (added_points[key] or 0) + 1
-        spent = spent + 1
+    common.call_context_command(character_context, character_cqi, skill_expression(skill_index) .. '.AddPoint')
+    common.call_context_command(character_context, character_cqi, 'CommitSkillChoices')
 
+    if is_logging_enabled() then
         log('skill: ' .. tostring(get_character_value(character_cqi, 'Name')) .. ', '
             .. with_name(get_character_value(character_cqi, skill_expression(skill_index) .. '.Name'), key)
             .. ', priority: ' .. priority
         )
     end
 
-    if spent > 0 then
-        common.call_context_command(character_context, character_cqi, 'CommitSkillChoices')
-    else
-        log_skill_statuses(character_cqi, points)
+    return true
+end
+
+-- One point per character per round. Commands are asynchronous, so only the next round sees
+-- the new level of a skill, the skills it unlocked and the skills it locked.
+local function run_skill_round(faction_name, waiting, stats)
+    if not cm:get_faction(faction_name):is_factions_turn() then
+        return false
     end
 
-    return spent
+    for character_cqi, entry in pairs(waiting) do
+        local points = get_character_value(character_cqi, 'SkillPointsAvailable') or 0
+
+        if points == 0 then
+            waiting[character_cqi] = nil
+        elseif points >= entry.points then
+            -- The game refused the last point or hasn't processed it yet: the next turn retries
+            stats.spent = stats.spent - 1
+            waiting[character_cqi] = nil
+
+            log('skill point not charged: ' .. tostring(get_character_value(character_cqi, 'Name')))
+        else
+            entry.skill_keys = entry.skill_keys or get_skill_keys(character_cqi)
+
+            if spend_skill_point(character_cqi, entry.skill_keys, points) then
+                stats.characters = stats.characters + (entry.points == math.huge and 1 or 0)
+                stats.spent = stats.spent + 1
+                entry.points = points
+            else
+                waiting[character_cqi] = nil
+            end
+        end
+    end
+
+    return next(waiting) ~= nil
+end
+
+local function run_skill_rounds(faction_name, waiting, stats)
+    local is_ok, has_more = pcall(run_skill_round, faction_name, waiting, stats)
+
+    if not is_ok then
+        log_errors('run_skill_round: ' .. tostring(has_more))
+        return
+    end
+
+    if has_more then
+        cm:callback(function()
+            run_skill_rounds(faction_name, waiting, stats)
+        end, settings.skill_round_delay)
+    else
+        log('auto skills done, characters: ' .. stats.characters .. ', points spent: ' .. stats.spent)
+    end
 end
 
 local function run_auto_skills(faction_name)
     local character_list = cm:get_faction(faction_name):character_list()
-    local characters = 0
-    local spent = 0
+    local waiting = {}
 
     for i = 0, character_list:num_items() - 1 do
         local character = character_list:item_at(i)
 
         if not character:is_wounded() then
-            local character_cqi = character:command_queue_index()
-
-            if (get_character_value(character_cqi, 'SkillPointsAvailable') or 0) > 0 then
-                local character_spent = spend_skill_points(character_cqi)
-
-                if character_spent > 0 then
-                    characters = characters + 1
-                    spent = spent + character_spent
-                end
-            end
+            waiting[character:command_queue_index()] = { points = math.huge }
         end
     end
 
-    log('auto skills done, characters: ' .. characters .. ', points spent: ' .. spent)
+    run_skill_rounds(faction_name, waiting, { characters = 0, spent = 0 })
 end
 
 local function on_player_turn_start(context)
@@ -686,13 +769,7 @@ local function find_hovered_slot()
 end
 
 -- A favorite is stored as the first level of the chain: that's what an empty slot can build
-local function get_slot_favorite_key(slot_uic)
-    local slot_id = slot_uic:GetContextObjectId(slot_context)
-
-    if not slot_id then
-        return nil
-    end
-
+local function get_slot_favorite_key(slot_id)
     local is_own_building = common.get_context_value(slot_context, slot_id,
         'IsEmpty == false && IsPlayerFaction && IsForeignSlot == false'
     )
@@ -728,7 +805,8 @@ local function refresh_favorite_button()
     end
 
     local slot_uic = find_hovered_slot()
-    local level_key = slot_uic and get_slot_favorite_key(slot_uic)
+    local slot_id = slot_uic and slot_uic:GetContextObjectId(slot_context)
+    local level_key = slot_id and get_slot_favorite_key(slot_id)
 
     if not level_key then
         return
@@ -738,6 +816,13 @@ local function refresh_favorite_button()
     local options_list = find_options_list(slot_uic)
 
     if not options_list then
+        return
+    end
+
+    -- On the way to the star the mouse can cross another slot while this popup is still open
+    local popup_slot_id = options_list:GetContextObjectId(slot_context)
+
+    if popup_slot_id and popup_slot_id ~= '' and popup_slot_id ~= slot_id then
         return
     end
 
@@ -858,16 +943,22 @@ end
 
 -- Vanilla components don't report hovers to scripts, and the game crashed in a test with
 -- common.force_report_of_all_ui_script_events on, so the UI is polled instead.
--- A failure stops the polling: it would repeat several times per second otherwise.
-local function poll_ui()
-    local is_ok, error_text = pcall(function()
-        refresh_favorite_button()
-        refresh_skill_buttons()
-    end)
+-- A failure stops only the step that failed: it would repeat several times per second otherwise.
+local ui_poll_steps = {
+    { name = 'refresh_favorite_button', handler = refresh_favorite_button },
+    { name = 'refresh_skill_buttons', handler = refresh_skill_buttons }
+}
 
-    if not is_ok then
-        cm:remove_real_callback(ui_poll_name)
-        log_errors('poll_ui: ' .. tostring(error_text))
+local function poll_ui()
+    for _, step in ipairs(ui_poll_steps) do
+        if not step.has_failed then
+            local is_ok, error_text = pcall(step.handler)
+
+            if not is_ok then
+                step.has_failed = true
+                log_errors('poll_ui, ' .. step.name .. ': ' .. tostring(error_text))
+            end
+        end
     end
 end
 
@@ -919,7 +1010,7 @@ load_skill_priorities()
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
 
-    cm:repeat_real_callback(poll_ui, settings.ui_poll_ms, ui_poll_name)
+    cm:repeat_real_callback(poll_ui, settings.ui_poll_ms)
 end)
 
 core:add_listener(
