@@ -38,8 +38,7 @@ The button:
   full path: the one in the prologue scripts has a `popup_holder` that no longer exists, and
   following it silently finds nothing.
 - The popup opens some time after the mouse enters, so polls before that find nothing and
-  simply wait for the next one. In the log, `favorite button: hovered` means the mod sees the
-  mouse over the player's building, and `shown` that the button was added.
+  simply wait for the next one.
 - With `favorite_buildings_enabled` off the polling does nothing and the button isn't shown.
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.

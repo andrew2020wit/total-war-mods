@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.4'
+local mod_version = '0.3.5'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -28,7 +28,6 @@ local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
 
 local favorites = {}
 local favorite_button_key = nil
-local logged_hover_key = nil
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -539,11 +538,6 @@ local function refresh_favorite_button()
         return
     end
 
-    if logged_hover_key ~= level_key then
-        logged_hover_key = level_key
-        log('favorite button: hovered ' .. slot_uic:Id() .. ', building: ' .. level_key)
-    end
-
     -- The game opens the popup some time after the mouse enters the slot
     local options_list = find_options_list(slot_uic)
 
@@ -562,7 +556,6 @@ local function refresh_favorite_button()
     options_list:Layout()
 
     favorite_button_key = level_key
-    log('favorite button: shown, building: ' .. level_key)
 end
 
 -- Vanilla slots don't report hovers to scripts, and the game crashed in a test with
