@@ -210,10 +210,10 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Centered icon of the star button                                     | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 | Auto skills: `Status` values                                         | Read from the log of 0.4.3     |
-| Auto skills: `AddPoint`, `CommitSkillChoices`, points charged        | **Not tested in the game**     |
+| Auto skills: `AddPoint`, `CommitSkillChoices`, priorities            | Work in 0.4.4: 78 points on 22 characters in one cycle, confirmed by the user in the game |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
-| Skill keys of the cards equal to `SkillList` keys                    | **Not tested in the game**     |
+| Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.
