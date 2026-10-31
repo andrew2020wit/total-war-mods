@@ -3,6 +3,9 @@
 Source code for the **"AF Tweaker"** mod for *Total War: Warhammer 3*: a collection of small
 campaign tweaks, each switched on and tuned from a settings window.
 
+This file is for developers. What a player needs to know is in the
+[user guide](docs/af-tweaker-user-guide.md): update it when the behaviour or the settings change.
+
 Not published on the Steam Workshop yet. First in-game run was on 2026-10-31 — see
 [Verification status](#verification-status) for what it did and didn't confirm.
 
@@ -228,6 +231,8 @@ mods/warhammer_3/af-tweaker/
   ui/skins/default/af_tweaker_skill_priority_0..3.png  <- icons of the skill priority button
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file
+docs/af-tweaker-user-guide.md             <- guide for players
+imgs/tweaker/                             <- screenshots for the user guide
 ```
 
 The folder and the pack are `af-tweaker`, while the script files, the MCT key and the

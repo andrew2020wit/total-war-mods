@@ -73,6 +73,20 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=2791799449
 ```
 
 
+## AF Tweaker
+
+Campaign mod that automates routine work at the start of your turn: it upgrades buildings,
+builds your favorite buildings and spends skill points by the priorities you set.
+Each feature can be turned off, and it's compatible with other mods, including Radious.
+
+Not published on the Steam Workshop yet.
+
+[User guide](./docs/af-tweaker-user-guide.md)
+
+### see also
+
+[af-tweaker-agent.md](./af-tweaker-agent.md)
+
 ## License
 
 These mods are under MIT license, you are free to use them as you want.
