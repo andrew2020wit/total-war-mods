@@ -161,7 +161,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
 | Star button: position, icon size, states, clicks, staying open under the mouse | **Not tested in the game**     |
-| Hovering `square_building_button` for all slot kinds, primary slots included | **Not tested in the game**     |
+| Hovering `square_building_button` for optional buildings (primary slots don't need the star) | **Not tested in the game**     |
 | `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
 | `PlayersFactionChainList` read from Lua, the list of faction buildings | Found in `ui/cco/buildings.cco`, **not tested in the game** |
 
