@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.1.1'
+local mod_version = '9.1.2'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -93,7 +93,8 @@ end
 local function get_setting(option_key)
     local default_value = settings[option_key]
 
-    if not get_mct then
+    -- Each player has own values of global options, and different values would be a desync
+    if not get_mct or cm:is_multiplayer() then
         return default_value
     end
 
@@ -152,7 +153,7 @@ local function the_same_culture_group(faction_a, faction_b)
         log_errors('Faction group not found, faction: ' .. faction_b)
     end
 
-    return id_a == id_b
+    return id_a ~= nil and id_a == id_b
 end
 
 local function culture_gets_bonuses(culture, player_culture)
@@ -160,8 +161,9 @@ local function culture_gets_bonuses(culture, player_culture)
         return get_setting('bonus_for_same_culture')
     end
 
-    return get_setting('bonus_for_same_culture_group')
-        or not the_same_culture_group(culture, player_culture)
+    -- Checked first, as this is what logs a culture missing from the groups
+    return not the_same_culture_group(culture, player_culture)
+        or get_setting('bonus_for_same_culture_group')
 end
 
 local function get_current_bundle_key(turn)
@@ -285,7 +287,8 @@ local function help_ai_each_turn(context)
         return
     end
 
-    local player_faction_name = cm:get_local_faction_name(true)
+    -- Not the local faction: in multiplayer it's different on each machine, a desync again
+    local player_faction_name = cm:get_human_factions()[1]
     local player_faction = cm:get_faction(player_faction_name)
 
     local current_culture = current_faction:culture()

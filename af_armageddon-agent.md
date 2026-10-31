@@ -93,6 +93,11 @@ them as soon as they're saved in its window, so a change applies from the next f
 All options are global (`set_is_global(true)`): one value for all campaigns. New options must
 set it too.
 
+In multiplayer `get_setting` ignores MCT and returns the defaults: each player has their own
+values of global options, and different bonuses on two machines would be a desync. For the
+same reason "the player" of the culture check and of the region count is the first faction of
+`cm:get_human_factions()`, not the local one. It's the same faction in single player.
+
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
 tests check that.
 
@@ -127,7 +132,8 @@ tests check that.
   in `culture_groups`, not to `culture_group_ids` directly.
 - `the_same_culture_group` logs to the error file (not a crash) when a culture key is
   missing from `culture_group_ids` — treat that log as "a faction culture is missing from
-  `culture_groups` and needs to be added".
+  `culture_groups` and needs to be added". A missing culture is in no group, not even with
+  another missing one, so such a faction gets the bonuses.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
 

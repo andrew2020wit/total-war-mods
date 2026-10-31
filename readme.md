@@ -6,7 +6,8 @@
 
 "Armageddon" modification increases difficulty for the middle and late game.
 
-AI gets various bonuses, but only if it has the different culture group than the player.
+AI gets various bonuses, but by default only if it has the different culture group than the
+player.
 
 ### Compatibility
 
@@ -19,6 +20,14 @@ You can add it during a campaign. Don't remove it then.
 The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
 (MCT). It's optional: without it the mod works with the default settings.
 The settings are global: one set of values for all campaigns.
+In multiplayer the mod always uses the default settings, and "the player" is the first player
+of the campaign.
+
+- who gets the bonuses: AI factions of your culture and of your culture group can get them too;
+- gold: the percent of the AI income per player region and per turn;
+- character experience: the amount and the start turn;
+- unit experience: the start turn and the turn interval;
+- a log file.
 
 ### About balance
 

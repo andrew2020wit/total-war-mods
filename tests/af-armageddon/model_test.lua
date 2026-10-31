@@ -80,7 +80,7 @@ local function read_script_defaults()
     return defaults
 end
 
--- world: { settings, changes, no_mct, no_mct_mod, last_turn, ai_culture, player_culture,
+-- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_culture, player_culture,
 -- player_regions, rank, no_general, null_unit }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
@@ -162,11 +162,21 @@ local function play(world)
         end
     }
 
+    local other_player = {
+        culture = function() return 'wh_main_grn_greenskins' end,
+        region_list = function() return list({ {}, {}, {} }) end
+    }
+
     env.cm = {
         add_first_tick_callback = function(_, callback) first_tick = callback end,
         turn_number = function() return turn end,
-        get_faction = function(_, name) return name == 'ai' and ai or player end,
-        get_local_faction_name = function() return 'player' end,
+        is_multiplayer = function() return world.is_mp == true end,
+        get_faction = function(_, name)
+            if name == 'other' then return other_player end
+            return name == 'ai' and ai or player
+        end,
+        get_human_factions = function() return { 'player', 'other' } end,
+        get_local_faction_name = function() return world.other_is_local and 'other' or 'player' end,
         treasury_mod = function(_, _, amount)
             gold_count = gold_count + 1
             last_gold = amount
@@ -304,6 +314,15 @@ do
     local result = play({ last_turn = 1, ai_culture = 'unknown_culture' })
     check('an unknown culture is logged', result.errors:find('unknown_culture', 1, true) ~= nil, result.errors)
     check('an unknown culture still gets bonuses', result.gold_count > 0, result.gold_count)
+
+    local both = play({ last_turn = 1, ai_culture = 'unknown_ai', player_culture = 'unknown_player' })
+    check('two unknown cultures are not one group', both.gold_count > 0, both.gold_count)
+    check('both unknown cultures are logged',
+        both.errors:find('unknown_ai', 1, true) ~= nil and both.errors:find('unknown_player', 1, true) ~= nil, both.errors)
+
+    local group_on = play({ settings = { bonus_for_same_culture_group = true }, last_turn = 1, ai_culture = 'unknown_culture' })
+    check('an unknown culture is logged with the group option on',
+        group_on.errors:find('unknown_culture', 1, true) ~= nil, group_on.errors)
 end
 
 print('-- bonuses for the culture group of the player')
@@ -419,6 +438,17 @@ end
 
 check_turns('without MCT: the defaults', { no_mct = true, last_turn = 11 }, '10,11')
 check_turns('MCT without this mod: the defaults', { no_mct_mod = true, last_turn = 11 }, '10,11')
+
+check_turns('multiplayer: the defaults, not the values of this player', {
+    is_mp = true,
+    settings = { army_experience_start_turn = 1, army_experience_turn_interval = 2 },
+    last_turn = 11
+}, '10,11')
+
+do
+    local result = play({ is_mp = true, other_is_local = true, last_turn = 1, player_regions = 1 })
+    check('multiplayer: the same player on each machine', math.floor(result.last_gold + 0.5) == 60, result.last_gold)
+end
 
 check_turns('a change applies from the next turn', {
     changes = { [11] = { army_experience_turn_interval = 2 } },
