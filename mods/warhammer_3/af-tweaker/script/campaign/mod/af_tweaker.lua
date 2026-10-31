@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.1'
+local mod_version = '0.3.2'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -563,6 +563,8 @@ local function on_slot_mouse_on(context)
 
     local level_key = get_slot_favorite_key(slot_uic)
 
+    log('favorite button: slot ' .. slot_uic:Id() .. ', building: ' .. tostring(level_key))
+
     cm:remove_real_callback(favorite_button_retry_name)
 
     if level_key then
@@ -614,6 +616,14 @@ load_favorites()
 -- The first tick is the earliest moment when the MCT settings are certainly loaded
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
+
+    -- ComponentMouseOn comes only from components with a ScriptEventReporter, which vanilla
+    -- building slots don't have. The game provides this switch for mods, which can't add one.
+    local is_ok, error_text = pcall(common.force_report_of_all_ui_script_events, true)
+
+    if not is_ok then
+        log_errors('force_report_of_all_ui_script_events: ' .. tostring(error_text))
+    end
 end)
 
 core:add_listener(

@@ -24,6 +24,11 @@ of each settlement, the mod takes the first favorite that can be built there and
 the budget.
 
 The button:
+- `ComponentMouseOn` isn't sent by default: only components with a `ScriptEventReporter` send
+  it, and vanilla slots have none. The mod calls
+  `common.force_report_of_all_ui_script_events(true)` on the first tick, which the game
+  documents as the switch for modders. It applies to the whole UI, so the listener has no
+  filter by name and must stay cheap.
 - Any `ComponentMouseOn` inside a slot counts: the mod walks up to the parent named
   `CcoCampaignBuildingSlot<id>`. Components of the popup don't count.
 - The popup comes from the `mouseover` property of `settlement_building_slot`
@@ -32,8 +37,9 @@ The button:
   full path: the one in the prologue scripts has a `popup_holder` that no longer exists, and
   following it silently finds nothing.
 - The popup opens some time after the mouse enters, so the search repeats on a real-time timer
-  for up to 2 seconds. A new hover cancels the previous search. `favorite button: popup not
-  found` in the log means the search gave up.
+  for up to 2 seconds. A new hover cancels the previous search. In the log,
+  `favorite button: slot` means the hover reached the mod, `shown` that the button was
+  added, and `popup not found` that the search gave up.
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
@@ -149,7 +155,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
-| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 didn't show it (wrong path); the fix is **not tested in the game** |
+| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 and 0.3.1 didn't show it (wrong path, then no hover events); the fix is **not tested in the game** |
 | `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
