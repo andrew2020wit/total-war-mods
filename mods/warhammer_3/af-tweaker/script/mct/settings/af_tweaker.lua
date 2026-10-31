@@ -16,6 +16,7 @@ local enabled = mct_mod:add_new_option("auto_upgrade_enabled", "checkbox")
 enabled:set_text("Upgrade buildings at the start of the turn")
 enabled:set_tooltip_text("At the start of your turn, buildings that can be upgraded are queued automatically.")
 enabled:set_default_value(true)
+enabled:set_is_global(true)
 
 local min_treasury = mct_mod:add_new_option("min_treasury", "slider")
 min_treasury:set_text("Minimum treasury")
@@ -23,6 +24,7 @@ min_treasury:set_tooltip_text("Automatic upgrades only spend the money above thi
 min_treasury:slider_set_min_max(0, 200000)
 min_treasury:slider_set_step_size(1000)
 min_treasury:set_default_value(5000)
+min_treasury:set_is_global(true)
 
 mct_mod:add_new_section("debug", "Debug")
 
