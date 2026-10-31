@@ -16,10 +16,13 @@ mods/warhammer_3/
   af_turn_crash_debug_logger/
     script/campaign/mod/af_turn_crash_debug_logger.lua
   af_turn_crash_debug_logger.pack
+  af-tweaker/                              <- source for "AF Tweaker" (see af-tweaker-agent.md at repo root)
+  af-tweaker.pack
 imgs/                                       <- Steam Workshop preview images, one per mod
 readme.md                                   <- end-user description of all mods (Workshop text)
 changelog.txt                               <- version history across mods
 af_armageddon-agent.md                      <- per-mod agent guide for AF Armageddon (see rule below)
+af-tweaker-agent.md                         <- per-mod agent guide for AF Tweaker
 .luarc.json                                 <- Lua language server config (gitignored, local-only)
 .mcp.json                                    <- local RPFM MCP server config (gitignored, local-only)
 temp/                                        <- scratch/WIP files, gitignored, not part of the project
@@ -60,6 +63,8 @@ project-wide only.
 - **Turn crash debug logger** (`af_turn_crash_debug_logger`) — writes debug info
   (`!af_turn_crash_debug_logger.csv`) to help pinpoint what's causing a repeated AI-turn
   crash, so the offending faction/character can then be killed via the in-game Lua console.
+- **AF Tweaker** (`af-tweaker`) — small campaign tweaks with a settings window; for now,
+  automatic building upgrades. See its dedicated [af-tweaker-agent.md](af-tweaker-agent.md).
 
 ## Toolchain
 
