@@ -5,6 +5,7 @@ local mod_version = '9.0.2'
 
 local settings = {
     enable_logging = true,
+    bonus_for_same_culture = false,
     bonus_for_same_culture_group = false,
     regions_percent = 4,
     time_percent = 2,
@@ -121,6 +122,15 @@ local function the_same_culture_group(faction_a, faction_b)
     end
 
     return id_a == id_b
+end
+
+local function culture_gets_bonuses(culture, player_culture)
+    if culture == player_culture then
+        return settings.bonus_for_same_culture
+    end
+
+    return settings.bonus_for_same_culture_group
+        or not the_same_culture_group(culture, player_culture)
 end
 
 log('Armageddon start! ' .. os.date() .. ' v. ' .. mod_version)
@@ -252,12 +262,7 @@ local function help_ai_each_turn(context)
     local current_culture = current_faction:culture()
     local player_culture = player_faction:culture()
 
-    if (current_culture == player_culture) then
-        return
-    end
-
-    if not settings.bonus_for_same_culture_group
-        and the_same_culture_group(current_culture, player_culture) then
+    if not culture_gets_bonuses(current_culture, player_culture) then
         return
     end
 

@@ -244,6 +244,20 @@ do
         result.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1', result.bundles[10])
 end
 
+print('-- bonuses for the culture of the player')
+
+local empire = 'wh_main_emp_empire'
+local dwarfs = 'wh_main_dwf_dwarfs'
+local same_culture_on = { bonus_for_same_culture = true }
+local both_on = { bonus_for_same_culture = true, bonus_for_same_culture_group = true }
+
+check_culture('off: the same culture gets none', empire, empire, false)
+check_culture('on: the same culture gets bonuses', empire, empire, true, same_culture_on)
+check_culture('on: the rest of the group gets none', dwarfs, empire, false, same_culture_on)
+check_culture('on: different groups still get them', 'wh_main_grn_greenskins', empire, true, same_culture_on)
+check_culture('both on: the same culture gets bonuses', empire, empire, true, both_on)
+check_culture('both on: the rest of the group gets bonuses', dwarfs, empire, true, both_on)
+
 print('-- effect bundles')
 
 do

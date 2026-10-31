@@ -8,9 +8,10 @@ Steam Workshop page: https://steamcommunity.com/sharedfiles/filedetails/?id=3665
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
 the AI faction bonuses — but **only** if that faction's culture is in a different
-*culture group* than the human player's culture. `settings.bonus_for_same_culture_group`
-(off by default) gives them to the other cultures of the player's group too, but never to
-the player's own culture. The bonuses scale up over the course of
+*culture group* than the human player's culture. Two independent settings, both off by
+default, widen that: `settings.bonus_for_same_culture` covers the player's own culture and
+`settings.bonus_for_same_culture_group` the other cultures of the player's group. The bonuses
+scale up over the course of
 the campaign (later turns / more player regions → bigger bonus). It is meant to be used
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
