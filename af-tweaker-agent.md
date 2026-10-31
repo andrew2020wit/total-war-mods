@@ -71,9 +71,9 @@ The list:
 ### Automatic character skills
 
 Off by default. At the start of the player's turn, after the buildings, each character with
-unspent points gets them spent on skills. Skills go by priority, higher first, and in the
-order of the skill tree for equal priorities; skills without a priority go last, so no point
-stays unspent while something can be bought.
+unspent points gets them spent, only on skills with a priority: higher first, and in the
+order of the skill tree for equal priorities. Skills without a priority are never touched,
+so points stay unspent for the player when no skill with a priority can take them.
 
 - `CcoCampaignCharacter` gives `CanCharacterRankUp`, `SkillPointsAvailable` and `SkillList`.
   A skill can take a point when `Status == "available"`, it isn't a background skill and

@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.4.0'
+local mod_version = '0.4.1'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -516,12 +516,12 @@ local function can_add_skill_point(character_cqi, skill_index, added_points)
     return level + added_points < total_levels
 end
 
--- Equal priorities go in the order of the skill tree
+-- Only skills with a priority are chosen. Equal priorities go in the order of the skill tree.
 local function find_next_skill(character_cqi, added_points)
     local skill_number = get_character_value(character_cqi, 'SkillList.Size') or 0
     local best_index = nil
     local best_key = nil
-    local best_priority = -1
+    local best_priority = 0
 
     for skill_index = 0, skill_number - 1 do
         local key = get_character_value(character_cqi, skill_expression(skill_index) .. '.Key')

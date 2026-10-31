@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '0.4.0'
+local mod_version = '0.4.1'
 
 local mct_mod = get_mct():register_mod("af_tweaker")
 
@@ -40,7 +40,7 @@ mct_mod:add_new_section("auto_skills", "Character skills")
 
 local auto_skills = mct_mod:add_new_option("auto_skills_enabled", "checkbox")
 auto_skills:set_text("Spend skill points at the start of the turn")
-auto_skills:set_tooltip_text("Characters spend their skill points automatically. Set a priority from 1 to 3 with the button on a skill card in the character panel: higher priorities go first.")
+auto_skills:set_tooltip_text("Characters spend their skill points automatically, only on skills with a priority. Set it from 1 to 3 with the button on a skill card in the character panel: higher priorities go first.")
 auto_skills:set_default_value(false)
 auto_skills:set_is_global(true)
 
