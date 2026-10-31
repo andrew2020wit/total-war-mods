@@ -157,7 +157,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | The `0.5` s delay after `FactionTurnStart`                           | Works in that run              |
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
-| Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
+| Favorite buildings: the expressions for an empty slot                | Work: the log of 2026-10-31 shows 2 favorites built on turn 45 |
 | Star button: finding the popup, clicks, saving to the file           | Works since 0.3.3, by polling; 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game |
 | Centered icon of the star button                                     | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
