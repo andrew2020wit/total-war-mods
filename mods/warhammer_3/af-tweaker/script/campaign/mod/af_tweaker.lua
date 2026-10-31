@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.4.3'
+local mod_version = '0.4.4'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -496,14 +496,15 @@ local function skill_expression(skill_index)
     return 'SkillList.At(' .. skill_index .. ')'
 end
 
--- "complete" is a skill that has levels already and may take more. Any kind of lock is a
--- status of its own, like locked_rank, so the status is enough.
+-- The game reports active, inactive (a parent skill is missing) and locked_due_to_rank.
+-- Fully levelled skills are active too, and the next level can need a higher rank.
 local function can_add_skill_point(character_cqi, skill_index, added_points)
     local skill = skill_expression(skill_index)
 
-    local is_open = get_character_value(character_cqi, '(' .. skill .. '.Status == "available"'
-        .. ' || ' .. skill .. '.Status == "complete")'
+    local is_open = get_character_value(character_cqi, skill .. '.Status == "active"'
         .. ' && ' .. skill .. '.IsBackgroundSkill == false'
+        .. ' && IsContextValid(' .. skill .. '.NextLevelContext)'
+        .. ' && ' .. skill .. '.NextLevelContext.RankRequired <= Rank'
     )
 
     if not is_open then
