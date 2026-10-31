@@ -7,9 +7,7 @@ hands at the start of each of your turns:
 - it builds the buildings you marked as favorites;
 - it spends your characters' skill points.
 
-Each of these can be turned on or off. The mod is compatible with other mods, including
-Radious: costs, buildings and skills are read from the game while it runs, so changes made by
-other mods are taken into account.
+Each of these can be turned on or off.
 
 ## Installation
 
@@ -106,6 +104,23 @@ skills without a priority, in the order of the skill tree.
 > **Before you turn this on:** on your next turn every character will spend all their
 > unspent points, including on skills without a priority. Set the priorities for your important
 > characters first, and make a save. The only way to undo a choice is the game's skill reset.
+
+## Compatibility with other mods
+
+AF Tweaker is meant to work alongside other mods, and it was tested in a campaign with
+**Radious**.
+
+- It doesn't change any game tables and doesn't replace any game interface files. It consists
+  of scripts and a few icons of its own, so it doesn't conflict with mods over them.
+- Costs, buildings and skills are read from the game while it runs, so changes made by other
+  mods are taken into account. Buildings and skills added by other mods work like vanilla ones:
+  they get the star too.
+- The order of the mods doesn't matter.
+- Mods that also build, upgrade or spend skill points automatically can work at the same time.
+  Whichever acts first takes the money or the points, so it's better to leave only one of them
+  on for each job.
+- A mod that replaces the building popup or the skill tree can hide the stars. The game keeps
+  working, but you may not be able to mark buildings or set priorities.
 
 ## Good to know
 
