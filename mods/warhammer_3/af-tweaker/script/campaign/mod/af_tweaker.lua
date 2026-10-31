@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.0'
+local mod_version = '0.3.1'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -13,7 +13,7 @@ local settings = {
     min_treasury = 5000,
     turn_start_delay = 0.5,
     popup_retry_delay_ms = 100,
-    popup_tries = 5
+    popup_tries = 20
 }
 
 local settlement_context = 'CcoCampaignSettlement'
@@ -21,11 +21,14 @@ local slot_context = 'CcoCampaignBuildingSlot'
 
 -- Lives in the game folder, not in a save: favorites are shared by all campaigns
 local favorites_file_name = '!!af_tweaker-favorites.txt'
+local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
+local favorite_button_retry_name = 'af_tweaker_favorite_button_retry'
 local favorite_button_template = 'ui/templates/round_small_button_toggle'
 local favorite_button_icon = 'ui/skins/default/icon_reputation_star_gold.png'
 
 local favorites = {}
+local favorite_button_key = nil
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -456,87 +459,17 @@ local function on_player_turn_start(context)
     end, settings.turn_start_delay)
 end
 
-local function count_available_levels(region_cqi, levels)
-    local chain_number = get_value(region_cqi, 'this.PlayersFactionChainList.Size')
-
-    if not chain_number then
-        log_errors('Faction building chains not found')
-        return
-    end
-
-    for chain_index = 0, chain_number - 1 do
-        local level_list = 'this.PlayersFactionChainList.At(' .. chain_index .. ').LevelsList'
-        local level_number = get_value(region_cqi, level_list .. '.Size') or 0
-
-        for level_index = 0, level_number - 1 do
-            local level_key = get_value(region_cqi, level_list .. '.At(' .. level_index .. ').Key')
-
-            if level_key and level_key ~= '' then
-                levels[level_key] = levels[level_key] or 0
-            end
-        end
-    end
-end
-
-local function count_built_levels(region_cqi, levels)
-    local slot_number = get_value(region_cqi, 'this.BuildingSlotList.Size') or 0
-
-    for slot_index = 0, slot_number - 1 do
-        local level_key = get_value(region_cqi,
-            slot_expression(slot_index) .. '.BuildingContext.BuildingLevelRecordContext.Key'
-        )
-
-        if level_key and level_key ~= '' then
-            levels[level_key] = (levels[level_key] or 0) + 1
-        end
-    end
-end
-
--- Lists what the faction can build, plus anything it owns from other cultures
-local function log_faction_buildings()
-    if not get_setting('enable_logging') then
-        return
-    end
-
-    local faction_name = cm:get_local_faction_name(true)
-    local region_list = cm:get_faction(faction_name):region_list()
-
-    if region_list:num_items() == 0 then
-        log('faction buildings: ' .. faction_name .. ' has no regions')
-        return
-    end
-
-    local levels = {}
-
-    -- The chain list is the same for every settlement of the faction
-    count_available_levels(region_list:item_at(0):cqi(), levels)
-
-    for i = 0, region_list:num_items() - 1 do
-        count_built_levels(region_list:item_at(i):cqi(), levels)
-    end
-
-    local level_keys = {}
-
-    for level_key in pairs(levels) do
-        table.insert(level_keys, level_key)
-    end
-
-    table.sort(level_keys)
-
-    local lines = { 'faction buildings: ' .. faction_name .. ', levels: ' .. #level_keys }
-
-    for _, level_key in ipairs(level_keys) do
-        table.insert(lines, 'building: ' .. building_title(level_key) .. ', built: ' .. levels[level_key])
-    end
-
-    log(table.concat(lines, '\n'))
-end
-
--- A building slot and everything inside it, its popup included, hang under a component
--- named CcoCampaignBuildingSlot + its id. Each slot has its own popup.
-local function find_slot_component(uic)
+-- Everything in a slot hangs under a component named CcoCampaignBuildingSlot + its id.
+-- The popup is skipped: moving the mouse inside it isn't a new hover.
+local function find_hovered_slot(uic)
     for _ = 1, 16 do
-        if string.find(uic:Id(), slot_context, 1, true) == 1 then
+        local id = uic:Id()
+
+        if id == 'root' or id == popup_name then
+            return nil
+        end
+
+        if string.find(id, slot_context, 1, true) == 1 then
             return uic
         end
 
@@ -583,21 +516,29 @@ local function update_favorite_button(button, level_key)
     end
 end
 
+local function find_component(parent, name)
+    local address = parent:Find(name, false)
+
+    return address and UIComponent(address) or nil
+end
+
 local function find_options_list(slot_uic)
-    return find_uicomponent(slot_uic, 'building_construction_popup', 'popup_holder', 'popup_panel',
-        'building_tree_holder', 'options_parent', 'options_buttons', 'options_list'
-    )
+    local popup = find_component(slot_uic, popup_name) or find_component(core:get_ui_root(), popup_name)
+
+    return popup and find_component(popup, 'options_list')
 end
 
 local function add_favorite_button(slot_uic, level_key, tries_left)
     local options_list = find_options_list(slot_uic)
 
-    -- The popup is built after the mouse enters the slot
+    -- The game opens the popup some time after the mouse enters the slot
     if not options_list then
         if tries_left > 1 then
             cm:real_callback(function()
                 add_favorite_button(slot_uic, level_key, tries_left - 1)
-            end, settings.popup_retry_delay_ms)
+            end, settings.popup_retry_delay_ms, favorite_button_retry_name)
+        else
+            log('favorite button: popup not found, building: ' .. level_key)
         end
 
         return
@@ -608,10 +549,13 @@ local function add_favorite_button(slot_uic, level_key, tries_left)
     button:SetImagePath(favorite_button_icon, 0)
     update_favorite_button(button, level_key)
     options_list:Layout()
+
+    favorite_button_key = level_key
+    log('favorite button: shown, building: ' .. level_key)
 end
 
 local function on_slot_mouse_on(context)
-    local slot_uic = find_slot_component(UIComponent(context.component))
+    local slot_uic = find_hovered_slot(UIComponent(context.component))
 
     if not slot_uic then
         return
@@ -619,23 +563,21 @@ local function on_slot_mouse_on(context)
 
     local level_key = get_slot_favorite_key(slot_uic)
 
+    cm:remove_real_callback(favorite_button_retry_name)
+
     if level_key then
         add_favorite_button(slot_uic, level_key, settings.popup_tries)
     end
 end
 
 local function on_favorite_button_click(context)
-    local button = UIComponent(context.component)
-    local slot_uic = find_slot_component(button)
-    local level_key = slot_uic and get_slot_favorite_key(slot_uic)
-
-    if not level_key then
+    if not favorite_button_key then
         log_errors('Favorite button: building not found')
         return
     end
 
-    toggle_favorite(level_key)
-    update_favorite_button(button, level_key)
+    toggle_favorite(favorite_button_key)
+    update_favorite_button(UIComponent(context.component), favorite_button_key)
 end
 
 -- An error inside a UI listener is otherwise lost
@@ -652,9 +594,7 @@ end
 core:add_listener(
     "AfTweakerSlotMouseOn",
     "ComponentMouseOn",
-    function(context)
-        return context.string == 'square_building_button'
-    end,
+    true,
     with_error_log('on_slot_mouse_on', on_slot_mouse_on),
     true
 )
@@ -674,14 +614,6 @@ load_favorites()
 -- The first tick is the earliest moment when the MCT settings are certainly loaded
 cm:add_first_tick_callback(function()
     log('Tweaker start! ' .. os.date() .. ' v. ' .. mod_version)
-
-    cm:callback(function()
-        local is_ok, error_text = pcall(log_faction_buildings)
-
-        if not is_ok then
-            log_errors('log_faction_buildings: ' .. tostring(error_text))
-        end
-    end, settings.turn_start_delay)
 end)
 
 core:add_listener(

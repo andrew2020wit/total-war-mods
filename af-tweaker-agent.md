@@ -24,13 +24,20 @@ of each settlement, the mod takes the first favorite that can be built there and
 the budget.
 
 The button:
-- `ComponentMouseOn` on `square_building_button` finds the slot component by walking up to
-  the parent named `CcoCampaignBuildingSlot<id>`. Each slot has its own popup.
+- Any `ComponentMouseOn` inside a slot counts: the mod walks up to the parent named
+  `CcoCampaignBuildingSlot<id>`. Components of the popup don't count.
+- The popup comes from the `mouseover` property of `settlement_building_slot`
+  (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's looked up by
+  name with the recursive `Find`, inside the slot first and then in the whole UI. Don't use a
+  full path: the one in the prologue scripts has a `popup_holder` that no longer exists, and
+  following it silently finds nothing.
+- The popup opens some time after the mouse enters, so the search repeats on a real-time timer
+  for up to 2 seconds. A new hover cancels the previous search. `favorite button: popup not
+  found` in the log means the search gave up.
 - The button is created with `core:get_or_create_component` from
-  `ui/templates/round_small_button_toggle` in `building_construction_popup > popup_holder >
-  popup_panel > building_tree_holder > options_parent > options_buttons > options_list`,
-  next to the demolish button. The popup can appear after the mouse event, so finding the
-  list is retried on a real-time timer. No vanilla UI file is replaced.
+  `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
+  No vanilla UI file is replaced.
+- A click applies to the last building the button was shown for.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
 - The icon is the vanilla `icon_reputation_star_gold.png`, on image index 0 of the template.
@@ -51,24 +58,6 @@ The list:
   queued building until the command is processed. The building cap across settlements has
   the same blind spot: if the game refuses such a command, the budget of that cycle is
   simply reduced by a building that wasn't built.
-
-### List of faction buildings
-
-Once per campaign load, shortly after the first tick, the log gets a list sorted by key:
-
-```
-faction buildings: wh_main_vmp_schwartzhafen, levels: 120
-building: Name (wh_main_vmp_cemetary_1), built: 3
-```
-
-It holds every building level from `PlayersFactionChainList` plus anything else standing in
-the player's settlements, such as buildings of other cultures in captured ones. `built`
-counts the current slots of the faction, so `0` means the level is available but not
-standing anywhere. The list helps to pick keys for favorite buildings.
-
-It needs `enable_logging`: with logging off nothing is read, and turning logging on during
-a campaign writes the list only after the next load. A faction without regions gets a single
-line instead, since the chain list is read from a settlement.
 
 ### Automatic building upgrades
 
@@ -160,10 +149,8 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
-| Star button: position, icon size, states, clicks, staying open under the mouse | **Not tested in the game**     |
-| Hovering `square_building_button` for optional buildings (primary slots don't need the star) | **Not tested in the game**     |
+| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 didn't show it (wrong path); the fix is **not tested in the game** |
 | `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
-| `PlayersFactionChainList` read from Lua, the list of faction buildings | Found in `ui/cco/buildings.cco`, **not tested in the game** |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.
@@ -203,5 +190,6 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
   section in this guide.
 - `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
   must only define settings; `cm` isn't available there.
-- Keep `mod_version` in sync with [changelog.txt](changelog.txt) and [readme.md](readme.md)
-  when shipping.
+- `mod_version` lives in both scripts, keep them equal: the MCT file shows it in the mod's
+  title, and it runs in the frontend too, where the campaign script doesn't exist. Keep it in
+  sync with [changelog.txt](changelog.txt) and [readme.md](readme.md) when shipping.

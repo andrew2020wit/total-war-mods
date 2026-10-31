@@ -4,9 +4,11 @@ if not get_mct then
     return
 end
 
+local mod_version = '0.3.1'
+
 local mct_mod = get_mct():register_mod("af_tweaker")
 
-mct_mod:set_title("AF Tweaker")
+mct_mod:set_title("AF Tweaker v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
 mct_mod:set_description("Small campaign tweaks.")
 
