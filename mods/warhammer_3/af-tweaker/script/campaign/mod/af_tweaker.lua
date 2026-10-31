@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.1.1'
+local mod_version = '0.1.2'
 
 local mct_mod_key = 'af_tweaker'
 

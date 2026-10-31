@@ -56,8 +56,9 @@ in memory as soon as they're saved in its window. So a change made during the pl
 applies from the next turn: this turn's cycle has already run. `enable_logging` is checked
 on every log line.
 
-The options aren't marked global, so MCT stores values changed inside a campaign for that
-campaign. Values set in the main menu are what new campaigns start with.
+`enable_logging` is global (`set_is_global(true)`): one value for all campaigns. The other
+options aren't, so MCT stores values changed inside a campaign for that campaign, and values
+set in the main menu are what new campaigns start with.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync.
 
