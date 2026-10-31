@@ -47,7 +47,10 @@ The button:
 - A click applies to the last building the button was shown for.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
-- The icon is the vanilla `icon_reputation_star_gold.png`, on image index 0 of the template.
+- The icon goes on image index 0 of the template, which shows it at 38x38 in every state. So
+  it must be a 38x38 image with the glyph centered: `af_tweaker_favorite_star.png` in the mod
+  is made from the vanilla `icon_reputation_star_gold.png`, which is 26x26 with uneven margins
+  and sits too high when used directly.
 - The building browser has a separate `options_list`, which doesn't get the button.
 
 The list:
@@ -156,8 +159,9 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | `IssueCommandForBuildingBrowser` called outside a click              | Runs without errors; the queue on the map and the treasury change are **not confirmed yet** |
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Found in the vanilla UI files, **not tested in the game** |
-| Star button: finding the popup, position, icon size, states, clicks  | 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game; polling since 0.3.3 is **not tested in the game** |
-| `!!af_tweaker-favorites.txt`: reading and writing in the game folder | Writing works for the logs, reading **not tested in the game** |
+| Star button: finding the popup, clicks, saving to the file           | Works since 0.3.3, by polling; 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game |
+| Centered icon of the star button                                     | **Not tested in the game**     |
+| Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
 queue on the map.
@@ -168,6 +172,7 @@ queue on the map.
 mods/warhammer_3/af-tweaker/
   script/campaign/mod/af_tweaker.lua      <- the mod logic
   script/mct/settings/af_tweaker.lua      <- the settings window, loaded by MCT
+  ui/skins/default/af_tweaker_favorite_star.png  <- icon of the favorite button
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file
 ```

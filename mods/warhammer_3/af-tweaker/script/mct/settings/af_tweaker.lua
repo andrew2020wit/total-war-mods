@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '0.3.3'
+local mod_version = '0.3.4'
 
 local mct_mod = get_mct():register_mod("af_tweaker")
 

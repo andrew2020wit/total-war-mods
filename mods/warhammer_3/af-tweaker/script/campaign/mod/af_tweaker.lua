@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.3.3'
+local mod_version = '0.3.4'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -24,7 +24,7 @@ local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
 local favorite_button_poll_name = 'af_tweaker_favorite_button_poll'
 local favorite_button_template = 'ui/templates/round_small_button_toggle'
-local favorite_button_icon = 'ui/skins/default/icon_reputation_star_gold.png'
+local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
 
 local favorites = {}
 local favorite_button_key = nil
