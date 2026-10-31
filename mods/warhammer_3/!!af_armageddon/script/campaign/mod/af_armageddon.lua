@@ -1,13 +1,16 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.0.1'
+local mod_version = '9.0.2'
 
 local settings = {
     enable_logging = true,
     regions_percent = 4,
     time_percent = 2,
-    experience_for_character = 200
+    experience_for_character = 200,
+    army_experience_start_turn = 10,
+    -- 1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...)
+    army_experience_turn_interval = 1
 }
 
 local effect_bundles = {
@@ -155,12 +158,12 @@ end
 local function add_xp_to_army(faction_name)
     local current_turn =  cm:turn_number()
 
-    if current_turn < 10 then
+    if current_turn < settings.army_experience_start_turn then
         return
     end
 
-    if current_turn < 30 and current_turn % 2 == 0 then
-        return        
+    if current_turn % settings.army_experience_turn_interval ~= 0 then
+        return
     end
 
 

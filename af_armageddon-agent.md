@@ -19,8 +19,9 @@ Bonuses applied per eligible AI faction turn:
   `settings.regions_percent`).
 - **Character XP** — added to every character in the faction, scaled by turn number
   (`settings.experience_for_character`).
-- **Unit XP** — +1 experience level per unit in armies that have a general, throttled
-  so it doesn't happen every turn early on.
+- **Unit XP** — +1 experience level per unit in armies that have a general, starting from
+  turn `settings.army_experience_start_turn`, on every n-th turn
+  (`settings.army_experience_turn_interval`: 1 — every turn, 3 — turns 3, 6, 9...).
 - **Effect bundle** — one of five escalating "ai_buff" effect bundles
   (`af_armageddon_effect_bundle_ai_buff_1..5`) is applied based on turn number
   (see `effect_bundles_turns`); older bundles are removed first so only one is active.
