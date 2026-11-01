@@ -84,7 +84,8 @@ end
 -- player_regions, rank, no_general, null_unit }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
--- last_gold, bundles (key by turn) and active_bundles, plus the logs in log and errors.
+-- last_gold, bundles (key by turn) and active_bundles, plus the logs in log and errors, and in
+-- rank_reads how many times the rank of a unit was read.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -97,6 +98,7 @@ local function play(world)
     local gold_count = 0
     local last_gold = 0
     local bundles, active_bundles = {}, {}
+    local rank_reads = 0
     local first_tick
     local env = setmetatable({}, { __index = _G })
 
@@ -131,7 +133,10 @@ local function play(world)
 
     local unit = {
         is_null_interface = function() return world.null_unit == true end,
-        experience_level = function() return world.rank or 0 end,
+        experience_level = function()
+            rank_reads = rank_reads + 1
+            return world.rank or 0
+        end,
         unit_key = function() return 'unit' end
     }
     local force = {
@@ -217,6 +222,7 @@ local function play(world)
         last_gold = last_gold,
         bundles = bundles,
         active_bundles = active_bundles,
+        rank_reads = rank_reads,
         log = read_file(log_name),
         errors = read_file(err_name)
     }
@@ -314,6 +320,9 @@ do
     local result = play({ last_turn = 1, ai_culture = 'unknown_culture' })
     check('an unknown culture is logged', result.errors:find('unknown_culture', 1, true) ~= nil, result.errors)
     check('an unknown culture still gets bonuses', result.gold_count > 0, result.gold_count)
+
+    local repeated = play({ last_turn = 3, ai_culture = 'unknown_culture' })
+    check('an unknown culture is logged once', select(2, repeated.errors:gsub('unknown_culture', '')) == 1, repeated.errors)
 
     local both = play({ last_turn = 1, ai_culture = 'unknown_ai', player_culture = 'unknown_player' })
     check('two unknown cultures are not one group', both.gold_count > 0, both.gold_count)
@@ -458,6 +467,7 @@ check_turns('a change applies from the next turn', {
 do
     local off = play({ last_turn = 10 })
     check('no log file by default', off.log == '', off.log)
+    check('the log option off: nothing is read for the log', off.rank_reads == 1, off.rank_reads)
 
     local no_mct = play({ no_mct = true, last_turn = 10 })
     check('no log file without MCT', no_mct.log == '', no_mct.log)
@@ -465,6 +475,9 @@ do
     local on = play({ settings = { enable_logging = true }, last_turn = 10 })
     check('the option writes the log', on.log:find('Armageddon start!', 1, true) ~= nil)
     check('the log has the bonuses', on.log:find('add_xp_to_army', 1, true) ~= nil)
+    check('the log has the units', on.log:find('rank: 0 => 0', 1, true) ~= nil, on.log)
+    check('the log has the characters', on.log:find('add xp to character', 1, true) ~= nil, on.log)
+    check('the log has the gold', on.log:find('treasury_before - after: 0 => 0', 1, true) ~= nil, on.log)
 
     local version = mod_source:match("mod_version = '([%d%.]+)'")
     check('the start line has the version', on.log:find('v. ' .. version, 1, true) ~= nil)

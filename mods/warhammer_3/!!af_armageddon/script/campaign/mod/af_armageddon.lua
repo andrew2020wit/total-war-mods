@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.1.2'
+local mod_version = '9.1.3'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -83,6 +83,7 @@ local culture_groups = {
 }
 
 local culture_group_ids = {}
+local logged_missing_cultures = {}
 
 for group_id, group in ipairs(culture_groups) do
     for _, culture in ipairs(group) do
@@ -119,41 +120,47 @@ local function get_setting(option_key)
     return value
 end
 
-local function log(text)
-    if not get_setting('enable_logging') then
-        return
-    end
+-- Call sites check it first when building the text takes calls to the game
+local function is_logging_enabled()
+    return get_setting('enable_logging')
+end
 
-    local file = io.open('!!af_armageddon.txt', "a")
+local function append_line(file_name, text)
+    local file = io.open(file_name, "a")
 
     if not file then return end
 
     file:write(tostring(text) .. "\n")
     file:close()
+end
+
+local function log(text)
+    if is_logging_enabled() then
+        append_line('!!af_armageddon.txt', text)
+    end
 end
 
 local function log_errors(text)
-    local file = io.open('!!af_armageddon-errors.txt', "a")
-
-    if not file then return end
-
-    file:write(tostring(text) .. "\n")
-    file:close()
+    append_line('!!af_armageddon-errors.txt', text)
 end
 
-local function the_same_culture_group(faction_a, faction_b)
-    local id_a = culture_group_ids[faction_a]
-    local id_b = culture_group_ids[faction_b]
-
-    if not id_a then
-        log_errors('Faction group not found, faction: ' .. faction_a)
+-- Once per culture: it would repeat on the turn of every faction otherwise
+local function log_missing_culture(culture)
+    if culture_group_ids[culture] or logged_missing_cultures[culture] then
+        return
     end
 
-    if not id_b then
-        log_errors('Faction group not found, faction: ' .. faction_b)
-    end
+    logged_missing_cultures[culture] = true
+    log_errors('Faction group not found, faction: ' .. culture)
+end
 
-    return id_a ~= nil and id_a == id_b
+local function the_same_culture_group(culture_a, culture_b)
+    log_missing_culture(culture_a)
+    log_missing_culture(culture_b)
+
+    local id_a = culture_group_ids[culture_a]
+
+    return id_a ~= nil and id_a == culture_group_ids[culture_b]
 end
 
 local function culture_gets_bonuses(culture, player_culture)
@@ -212,6 +219,7 @@ local function add_xp_to_army(faction_name)
 
     local faction = cm:get_faction(faction_name)
     local force_list = faction:military_force_list()
+    local is_logging = is_logging_enabled()
 
     log('add_xp_to_army, faction: ' .. faction_name)
 
@@ -231,12 +239,12 @@ local function add_xp_to_army(faction_name)
                         cm:add_experience_to_unit(unit, 1)
                     end
 
-                    local new_rank = unit:experience_level()
-
-                    log(
-                        'unit ' .. unit:unit_key()
-                        .. ' rank: ' .. tostring(rank) .. ' => ' .. tostring(new_rank)
-                    )
+                    if is_logging then
+                        log(
+                            'unit ' .. unit:unit_key()
+                            .. ' rank: ' .. tostring(rank) .. ' => ' .. tostring(unit:experience_level())
+                        )
+                    end
                 end
             end
         end
@@ -252,6 +260,7 @@ local function add_xp_to_characters(faction_name)
 
     local faction = cm:get_faction(faction_name)
     local xp_bonus = current_turn * get_setting('experience_for_character')
+    local is_logging = is_logging_enabled()
 
     local characters = faction:character_list()
 
@@ -260,17 +269,15 @@ local function add_xp_to_characters(faction_name)
 
         local character_str = cm:char_lookup_str(character)
 
-        local level_before = character:rank()
+        local level_before = is_logging and character:rank()
 
         cm:add_agent_experience(character_str, xp_bonus)
 
-        local level_after = character:rank()
-
-        local name = character:character_subtype_key()
-
-        log('add xp to character ' .. name .. ' : ' .. tostring(xp_bonus)
-            .. ' level: ' .. tostring(level_before) .. ' => ' .. tostring(level_after)
-        )
+        if is_logging then
+            log('add xp to character ' .. character:character_subtype_key() .. ' : ' .. tostring(xp_bonus)
+                .. ' level: ' .. tostring(level_before) .. ' => ' .. tostring(character:rank())
+            )
+        end
     end
 end
 
@@ -307,24 +314,25 @@ local function help_ai_each_turn(context)
 
     local gold_bonus = (region_multiplier + time_multiplier) * ai_income;
 
-    local debug_treasury_before = current_faction:treasury()
+    local is_logging = is_logging_enabled()
+    local debug_treasury_before = is_logging and current_faction:treasury()
 
     -- Add money
     cm:treasury_mod(current_faction_name, gold_bonus)
 
-    local debug_treasury_after = current_faction:treasury()
-
-    log('=========== gold_bonus ===============\n' ..
-        'Faction: ' .. current_faction_name .. '\n' ..
-        "$$$$ ai_income: " .. tostring(ai_income) .. '\n' ..
-        "++++ gold_bonus: " .. tostring(gold_bonus) .. '\n' ..
-        ". time_multiplier: " .. tostring(time_multiplier) .. '\n' ..
-        ". player_regions_number: " .. tostring(player_regions_number) .. '\n' ..
-        ". region_multiplier: " .. tostring(region_multiplier) .. '\n' ..
-        ". treasury_before - after: " ..
-        tostring(debug_treasury_before) .. ' => ' .. debug_treasury_after .. '\n' ..
-        "===================="
-    )
+    if is_logging then
+        log('=========== gold_bonus ===============\n' ..
+            'Faction: ' .. current_faction_name .. '\n' ..
+            "$$$$ ai_income: " .. tostring(ai_income) .. '\n' ..
+            "++++ gold_bonus: " .. tostring(gold_bonus) .. '\n' ..
+            ". time_multiplier: " .. tostring(time_multiplier) .. '\n' ..
+            ". player_regions_number: " .. tostring(player_regions_number) .. '\n' ..
+            ". region_multiplier: " .. tostring(region_multiplier) .. '\n' ..
+            ". treasury_before - after: " ..
+            tostring(debug_treasury_before) .. ' => ' .. current_faction:treasury() .. '\n' ..
+            "===================="
+        )
+    end
 
     add_xp_to_characters(current_faction_name)
 

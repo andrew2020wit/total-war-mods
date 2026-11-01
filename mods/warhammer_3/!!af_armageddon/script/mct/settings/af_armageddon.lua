@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.1.2'
+local mod_version = '9.1.3'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 

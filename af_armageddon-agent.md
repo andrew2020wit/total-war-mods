@@ -135,9 +135,11 @@ tests check that.
   a new faction/subculture (e.g. a new DLC race), add its culture key to the correct group
   in `culture_groups`, not to `culture_group_ids` directly.
 - `the_same_culture_group` logs to the error file (not a crash) when a culture key is
-  missing from `culture_group_ids` — treat that log as "a faction culture is missing from
-  `culture_groups` and needs to be added". A missing culture is in no group, not even with
-  another missing one, so such a faction gets the bonuses.
+  missing from `culture_group_ids`, once per culture until the script loads again — treat that
+  log as "a faction culture is missing from `culture_groups` and needs to be added". A missing
+  culture is in no group, not even with another missing one, so such a faction gets the bonuses.
+- Check `is_logging_enabled()` before a log line whose text takes calls to the game: `log`
+  checks it too, but only after the arguments were already evaluated.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
 
