@@ -92,8 +92,8 @@ defaults from the `settings` table in the script.
 Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
 them as soon as they're saved in its window, so a change applies from the next faction turn.
 
-All options are global (`set_is_global(true)`): one value for all campaigns. New options must
-set it too.
+All options but `skip_bonuses_<culture>` are global (`set_is_global(true)`): one value for all
+campaigns. New options must set it too, unless they belong to a campaign.
 
 Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
 the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
@@ -117,6 +117,10 @@ log on each turn of such a faction.
   `db/cultures_tables` when a DLC adds a culture, and raise the number in the test. The `*` row
   isn't a culture, and `wh3_main_pro_ksl_kislev` of the prologue is left out on purpose: its
   name is the same "Kislev", and the main campaign doesn't have it.
+- These options belong to a campaign (`set_is_global(false)`): MCT keeps them in the save, so
+  the script reads them like any other option. A value set in the main menu applies to the
+  next new campaign only. A campaign saved without them, for example one the mod was added
+  to, has them all off, whatever the menu says.
 - `set_text` gets the loc key `cultures_name_<culture>` of the game, so the names are in the
   language of the game. A key without text is shown as it is.
 - The section is the last one. MCT gives each of the two columns the same number of sections,

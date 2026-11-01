@@ -39,8 +39,8 @@ The version of the mod is shown in its title.
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
 | Skip the bonuses for cultures | One checkbox for each culture | Off | The AI factions of this culture get no bonuses |
 
-The settings are the same for all your campaigns. A change takes effect from the next turn of
-an AI faction.
+The settings are the same for all your campaigns, except the skipped cultures. A change takes
+effect from the next turn of an AI faction.
 
 ### Skipping cultures
 
@@ -49,6 +49,10 @@ column of the window to see all of it.
 
 Tick a culture and its AI factions stop getting all the bonuses. Your own culture is on the list
 too: by default the other factions of your culture get the bonuses like everybody else.
+
+Each campaign has its own list. A change made in a campaign applies to that campaign only. In
+the main menu it applies to the next campaign you start, not to the ones already running. If
+you add the mod to a running campaign, no culture is skipped until you tick it there.
 
 Cultures from other mods aren't on the list, so they always get the bonuses.
 

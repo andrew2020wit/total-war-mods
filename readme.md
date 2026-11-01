@@ -21,7 +21,8 @@ support it.
 
 The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
 (MCT). It's optional: without it the mod works with the default settings.
-The settings are global: one set of values for all campaigns.
+The settings are global: one set of values for all campaigns. Only the list of cultures
+without bonuses is set for each campaign.
 
 - gold: the percent of the AI income per player region and per turn;
 - character experience: the amount and the start turn;

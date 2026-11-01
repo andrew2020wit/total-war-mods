@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.3.2'
+local mod_version = '9.3.3'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
@@ -114,5 +114,6 @@ for _, culture in ipairs(cultures) do
     skip_culture:set_text("cultures_name_" .. culture)
     skip_culture:set_tooltip_text("AI factions of this culture get no bonuses.")
     skip_culture:set_default_value(false)
-    skip_culture:set_is_global(true)
+    -- Each campaign has its own list: MCT keeps these values in the save
+    skip_culture:set_is_global(false)
 end

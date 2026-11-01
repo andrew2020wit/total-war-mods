@@ -424,7 +424,7 @@ do
             culture_options = culture_options + 1
             check(key .. ': a checkbox', option.type == 'checkbox', option.type)
             check(key .. ': off by default', option.default == false, option.default)
-            check(key .. ': global', option.is_global == true)
+            check(key .. ': for each campaign', option.is_global == false, option.is_global)
             check(key .. ': the name from the game', option.text == 'cultures_name_' .. culture, option.text)
         else
             check('a default for the MCT option ' .. key, defaults[key] ~= nil)

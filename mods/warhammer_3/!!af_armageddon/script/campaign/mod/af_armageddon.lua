@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.3.2'
+local mod_version = '9.3.3'
 
 local mct_mod_key = 'af_armageddon'
 
