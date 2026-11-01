@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.5.2'
+local mod_version = '0.5.3'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -122,12 +122,28 @@ local function get_value(region_cqi, expression)
     return common.get_context_value(settlement_context, region_cqi, expression)
 end
 
+-- A loc text can refer to another one as {{tr:key}}, and the game returns it as it is. The key is
+-- either in ui_text_replacements or a whole loc key. A reference without a text stays in the log.
+local function resolve_text_refs(name)
+    return (name:gsub('{{tr:(.-)}}', function(key)
+        local text = common.get_localised_string('ui_text_replacements_localised_text_' .. key)
+
+        if text == '' then
+            text = common.get_localised_string(key)
+        end
+
+        if text ~= '' then
+            return text
+        end
+    end))
+end
+
 local function with_name(name, key)
     if not name or name == '' then
         return key
     end
 
-    return name .. ' (' .. key .. ')'
+    return resolve_text_refs(name) .. ' (' .. key .. ')'
 end
 
 local function building_title(level_key)

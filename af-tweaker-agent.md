@@ -285,6 +285,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Star button: a click finds the slot through the parents              | Works in 0.5.2: a click saved the key of its building, no errors |
 | Tooltips of both stars on hover, with `text_source`                  | **Not tested in the game** (0.5.2) |
 | Auto skills: `Level` goes up after a commit                          | **Not tested in the game** (0.5.2) |
+| `{{tr:key}}` in the names of the log, `get_localised_string`         | **Not tested in the game** (0.5.3) |
 | Star button: the state after a click on another slot of the chain    | **Not tested in the game** (0.5.1) |
 | Favorites with a cap: refused commands are gone                      | **Not tested in the game** (0.5.1) |
 | Panels as direct children of the root                                | Works in 0.5.2: both kinds of stars were shown and clicked |
@@ -359,7 +360,10 @@ sandbox, packs built with RPFM. The vanilla data can be read through RPFM's MCP 
 - Log lines show the in-game name in the game's language next to the key, like
   `Name (key)`. The key alone means the game returned no name: building names come from
   `PlayerVariantRecordContext.Name` on `CcoBuildingLevelRecord`, settlement names from
-  `Name` on `CcoCampaignSettlement`.
+  `Name` on `CcoCampaignSettlement`. A name can hold a reference to another text, `{{tr:key}}`,
+  which the game returns as it is: `with_name` looks the key up with the prefix
+  `ui_text_replacements_localised_text_` (`Spread Corruption`), then as a whole loc key
+  (`The Hunger`). Only a reference without any text stays in the log.
 - The start line of the log is written on the first tick, not at load time: the MCT settings
   may not be loaded yet when the script file runs.
 - A new tweak gets its own section in the MCT file with an on/off option, and its own

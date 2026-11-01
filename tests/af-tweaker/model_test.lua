@@ -155,6 +155,12 @@ local function start(world)
     end
 
     env.common = {
+        get_localised_string = function(key)
+            return ({
+                ui_text_replacements_localised_text_replacement = 'Replaced',
+                direct_key = 'Direct'
+            })[key] or ''
+        end,
         get_context_value = function(context, id, expr)
             if context == 'CcoBuildingLevelRecord' then
                 if expr == 'Key' then return id end
@@ -176,7 +182,7 @@ local function start(world)
                 if expr:find('%.Status == "active"') then return skill.level < skill.total end
                 if expr:find('%.Key$') then return skill.key end
                 if expr:find('%.Level$') then return skill.level end
-                if expr:find('%.Name$') then return skill.key .. ' name' end
+                if expr:find('%.Name$') then return skill.name or (skill.key .. ' name') end
                 if expr:find('%.Status$') then return 'active' end
                 error('skill expression: ' .. expr)
             end
@@ -386,6 +392,25 @@ do
     world.turn_over = true
     game.turn()
     check('nothing is spent after the turn ended', world.points == 5)
+end
+
+do
+    local world = {
+        points = 4,
+        skills = {
+            { key = 'a', level = 0, total = 1, name = '{{tr:replacement}}' },
+            { key = 'b', level = 0, total = 1, name = '{{tr:direct_key}}' },
+            { key = 'c', level = 0, total = 1, name = 'The {{tr:replacement}} of {{tr:direct_key}}' },
+            { key = 'd', level = 0, total = 1, name = '{{tr:no_text}}' }
+        }
+    }
+    local game = start(world)
+    game.turn()
+    check('a name from ui_text_replacements', game.log():find('Replaced (a)', 1, true) ~= nil, game.log())
+    check('a name from a whole loc key', game.log():find('Direct (b)', 1, true) ~= nil, game.log())
+    check('several references in one name', game.log():find('The Replaced of Direct (c)', 1, true) ~= nil, game.log())
+    check('a reference without a text stays', game.log():find('{{tr:no_text}} (d)', 1, true) ~= nil, game.log())
+    check('the references break nothing', game.errors() == '', game.errors())
 end
 
 -- Buildings
