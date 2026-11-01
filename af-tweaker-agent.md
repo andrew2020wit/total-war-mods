@@ -276,27 +276,27 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
 | Auto skills: `Status` values                                         | Read from the log of 0.4.3     |
 | Auto skills: `AddPoint`, `CommitSkillChoices`, priorities            | Work in 0.4.4: 78 points on 22 characters in one cycle, confirmed by the user in the game |
-| Auto skills in rounds: the commit is done within `round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
+| Auto skills in rounds: the commit is done within `round_delay`       | Works in 0.5.2: 82 points on 23 characters in one cycle, no `not charged` lines |
+| Auto skills in rounds: locked skills lose `active`                   | **Not tested in the game** (0.4.5) |
 | Auto skills: moving on to the next skill after a refused point       | **Not tested in the game** (0.5.0) |
-| Building rounds for development points and pooled resources          | **Not tested in the game** (0.5.0) |
+| Building rounds for development points                               | Work in 0.5.2: upgrades waited with their gold reserved, the rounds ended, the budget adds up with the costs in the log |
+| Building rounds for pooled resources                                 | **Not tested in the game** (0.5.0) |
 | Star button: the popup is a child of its slot                        | Read from the `[ui]` lines of the script log |
-| Star button: a click finds the slot through the parents              | **Not tested in the game** (0.5.2) |
+| Star button: a click finds the slot through the parents              | Works in 0.5.2: a click saved the key of its building, no errors |
 | Tooltips of both stars on hover, with `text_source`                  | **Not tested in the game** (0.5.2) |
 | Auto skills: `Level` goes up after a commit                          | **Not tested in the game** (0.5.2) |
 | Star button: the state after a click on another slot of the chain    | **Not tested in the game** (0.5.1) |
 | Favorites with a cap: refused commands are gone                      | **Not tested in the game** (0.5.1) |
-| Panels as direct children of the root                                | Read from the `[ui]` lines of the script log; polling through them is **not tested in the game** (0.5.0) |
+| Panels as direct children of the root                                | Works in 0.5.2: both kinds of stars were shown and clicked |
 | Hiding the buttons when an option is turned off                      | **Not tested in the game** (0.5.0) |
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
-queue on the map; check that both kinds of stars still appear (0.5.0 finds them another way),
-show their tooltips on hover, and that a click on a building star changes that building (0.5.2);
-check that no `skill point not charged` lines appear for characters with several points, and
-that a pair of locked skills gets only one point; with a faction that uses pooled resources,
-check that several such buildings are queued in one turn.
+queue on the map; check that both kinds of stars show their tooltips on hover; check that a
+pair of locked skills gets only one point; with a faction that uses pooled resources, check
+that several such buildings are queued in one turn.
 
 ## Tests
 
