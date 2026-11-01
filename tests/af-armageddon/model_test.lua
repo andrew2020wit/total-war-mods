@@ -33,7 +33,7 @@ local function read_mct_options()
     local options = {}
     local title
     local option_methods = {
-        set_text = function() end,
+        set_text = function(self, text) self.text = text end,
         set_tooltip_text = function() end,
         set_default_value = function(self, value) self.default = value end,
         set_is_global = function(self, value) self.is_global = value end,
@@ -81,7 +81,7 @@ local function read_script_defaults()
 end
 
 -- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_is_human, ai_is_rebel,
--- player_regions, rank, no_general, null_unit }
+-- ai_culture, player_regions, rank, no_general, null_unit }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
 -- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
@@ -118,6 +118,10 @@ local function play(world)
                     if world.no_mct_mod then return nil end
                     return {
                         get_option_by_key = function(_, option_key)
+                            -- A culture from another mod has no option
+                            if option_key:find('^skip_bonuses_') and not mct_options[option_key] then
+                                return nil
+                            end
                             assert(mct_options[option_key], 'no such MCT option: ' .. option_key)
                             return { get_finalized_setting = function() return overrides[option_key] end }
                         end
@@ -147,6 +151,7 @@ local function play(world)
         name = function() return 'ai' end,
         is_rebel = function() return world.ai_is_rebel == true end,
         is_human = function() return world.ai_is_human == true end,
+        culture = function() return world.ai_culture or 'wh_main_grn_greenskins' end,
         income = function() return 1000 end,
         treasury = function() return 0 end,
         military_force_list = function() return list({ force }) end,
@@ -295,6 +300,31 @@ do
     check_no_bonuses('the player gets nothing', { last_turn = 10, ai_is_human = true })
     check_no_bonuses('rebels get nothing', { last_turn = 10, ai_is_rebel = true })
 
+    local skip_greenskins = { skip_bonuses_wh_main_grn_greenskins = true }
+
+    check_no_bonuses('a skipped culture gets nothing', { settings = skip_greenskins, last_turn = 10 })
+
+    local other = play({ settings = { skip_bonuses_wh_main_emp_empire = true }, last_turn = 3 })
+    check('the other cultures still get the bonuses', other.gold_count == 3, other.gold_count)
+
+    local unknown = play({ settings = skip_greenskins, last_turn = 3, ai_culture = 'unknown_culture' })
+    check('a culture from another mod gets the bonuses', unknown.gold_count == 3, unknown.gold_count)
+
+    local ticked = play({ changes = { [3] = skip_greenskins }, last_turn = 5 })
+    check('a culture ticked during the campaign stops getting them', ticked.gold_count == 2, ticked.gold_count)
+
+    local no_mct = play({ no_mct = true, last_turn = 3 })
+    check('without MCT no culture is skipped', no_mct.gold_count == 3, no_mct.gold_count)
+
+    local multiplayer = play({ is_mp = true, settings = skip_greenskins, last_turn = 3 })
+    check('multiplayer: no culture is skipped', multiplayer.gold_count == 3, multiplayer.gold_count)
+
+    local logged = play({
+        settings = { enable_logging = true, skip_bonuses_wh_main_grn_greenskins = true },
+        last_turn = 1
+    })
+    check('the log has the skipped faction', logged.log:find('skip bonuses, faction: ai', 1, true) ~= nil, logged.log)
+
     local result = play({ last_turn = 10 })
     check('an AI faction gets gold every turn', result.gold_count == 10, result.gold_count)
     check('an AI faction gets unit experience', result.xp_turns == '10', result.xp_turns)
@@ -369,9 +399,23 @@ do
         end
     end
 
-    for key in pairs(mct_options) do
-        check('a default for the MCT option ' .. key, defaults[key] ~= nil)
+    local culture_options = 0
+
+    for key, option in pairs(mct_options) do
+        local culture = key:match('^skip_bonuses_(.+)')
+
+        if culture then
+            culture_options = culture_options + 1
+            check(key .. ': a checkbox', option.type == 'checkbox', option.type)
+            check(key .. ': off by default', option.default == false, option.default)
+            check(key .. ': global', option.is_global == true)
+            check(key .. ': the name from the game', option.text == 'cultures_name_' .. culture, option.text)
+        else
+            check('a default for the MCT option ' .. key, defaults[key] ~= nil)
+        end
     end
+
+    check('an option for each culture', culture_options == 26, culture_options)
 
     check('logging is off by default', defaults.enable_logging == false)
 

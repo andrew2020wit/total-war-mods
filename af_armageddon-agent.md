@@ -11,8 +11,8 @@ change.
 ## What the mod does
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
-the faction bonuses, whatever its culture: only the human player and the rebels get none.
-The bonuses scale up over the course of
+the faction bonuses. Only the human player, the rebels and the cultures ticked in the settings
+get none. The bonuses scale up over the course of
 the campaign (later turns / more player regions → bigger bonus). It is meant to be used
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
@@ -87,6 +87,7 @@ defaults from the `settings` table in the script.
 | `army_experience_start_turn`      | slider   | `10`    | First turn of unit XP, 1-200                |
 | `army_experience_turn_interval`   | slider   | `1`     | Unit XP on every n-th turn, 1-50            |
 | `enable_logging`                  | checkbox | `false` | Writes `!!af_armageddon.txt`                |
+| `skip_bonuses_<culture>`          | checkbox | `false` | No bonuses for this culture, one per culture |
 
 Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
 them as soon as they're saved in its window, so a change applies from the next faction turn.
@@ -101,7 +102,26 @@ player" of the region count is the first faction of
 `cm:get_human_factions()`, not the local one. It's the same faction in single player.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
-tests check that.
+tests check that. The only exception is `skip_bonuses_<culture>`, see below.
+
+### The list of cultures
+
+The `cultures` table of the MCT file is the only list of cultures in the repository: the
+script builds the option key from the culture of the faction. So these options have no entry
+in `settings`, and a culture from another mod has no option and always gets the bonuses.
+`get_setting` passes `true` to `get_option_by_key`, otherwise MCT would write a warning to its
+log on each turn of such a faction.
+
+- It's written by hand: MCT creates the options when this file loads, and its `multibox` type
+  is an empty stub, `dropdown_game_object` is unfinished. Compare it with
+  `db/cultures_tables` when a DLC adds a culture, and raise the number in the test. The `*` row
+  isn't a culture, and `wh3_main_pro_ksl_kislev` of the prologue is left out on purpose: its
+  name is the same "Kislev", and the main campaign doesn't have it.
+- `set_text` gets the loc key `cultures_name_<culture>` of the game, so the names are in the
+  language of the game. A key without text is shown as it is.
+- The section is the last one. MCT gives each of the two columns the same number of sections,
+  whatever their height, and the columns scroll. So the list is in the second column, after
+  Debug, and the other settings stay in view.
 
 ## Toolchain
 

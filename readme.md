@@ -6,7 +6,7 @@
 
 "Armageddon" modification increases difficulty for the middle and late game.
 
-All AI factions get various bonuses, whatever their culture.
+All AI factions get various bonuses. You can turn them off for chosen cultures.
 
 ### Compatibility
 
@@ -26,7 +26,8 @@ The settings are global: one set of values for all campaigns.
 - gold: the percent of the AI income per player region and per turn;
 - character experience: the amount and the start turn;
 - unit experience: the start turn and the turn interval;
-- a log file.
+- a log file;
+- the cultures that get no bonuses.
 
 ### About balance
 

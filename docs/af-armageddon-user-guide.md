@@ -9,8 +9,8 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-Every AI faction gets them, whatever its culture: alliances, vassals and wars change nothing.
-Only rebels never get them.
+Every AI faction gets them: alliances, vassals and wars change nothing. Rebels never get them,
+and you can turn them off for whole cultures in the settings.
 
 ## Installation
 
@@ -37,9 +37,20 @@ The version of the mod is shown in its title.
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Every n-th turn | 1 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50 |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
+| Skip the bonuses for cultures | One checkbox for each culture | Off | The AI factions of this culture get no bonuses |
 
 The settings are the same for all your campaigns. A change takes effect from the next turn of
 an AI faction.
+
+### Skipping cultures
+
+The last section lists the cultures of the game and its DLCs. It's long, so scroll the right
+column of the window to see all of it.
+
+Tick a culture and its AI factions stop getting all the bonuses. Your own culture is on the list
+too: by default the other factions of your culture get the bonuses like everybody else.
+
+Cultures from other mods aren't on the list, so they always get the bonuses.
 
 ## What the AI gets
 
@@ -81,7 +92,8 @@ This bonus has no settings. Each faction has one bundle at a time, the one of th
 | 40 | +200 | +10 | +100 |
 
 Research applies to the faction, recruitment and growth to each of its provinces. The bundle
-lasts two turns and is renewed every turn.
+lasts two turns and is renewed every turn, so when a faction stops getting the bonuses it
+loses the bundle soon after.
 
 ## Compatibility with other mods
 
@@ -97,8 +109,8 @@ AF Armageddon was made to be used with **Radious**, and it's compatible with any
 Balance depends on many things: mods, factions, random events, your skills and your style. All
 you can expect is that the difficulty gradually grows.
 
-If it's too hard, lower the two gold percents or move the start turns later. If it's too easy,
-raise the percents or move the start turns earlier.
+If it's too hard, lower the two gold percents, move the start turns later or skip some cultures.
+If it's too easy, raise the percents or move the start turns earlier.
 
 ## Good to know
 

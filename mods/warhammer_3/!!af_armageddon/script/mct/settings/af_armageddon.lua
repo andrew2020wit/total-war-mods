@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.2.2'
+local mod_version = '9.3.1'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
@@ -73,3 +73,46 @@ logging:set_text("Write a log file")
 logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder.")
 logging:set_default_value(false)
 logging:set_is_global(true)
+
+-- The last section: MCT splits the sections between two columns by their number, so this long
+-- list gets the scroll of the second column and doesn't push the other settings down
+mct_mod:add_new_section("skip_bonuses", "Skip the bonuses for cultures")
+
+-- The keys of db/cultures_tables, by their English names, without the prologue Kislev
+local cultures = {
+    "wh_dlc03_bst_beastmen",
+    "wh_main_brt_bretonnia",
+    "wh3_dlc23_chd_chaos_dwarfs",
+    "wh3_main_dae_daemons",
+    "wh2_main_def_dark_elves",
+    "wh_main_dwf_dwarfs",
+    "wh3_main_cth_cathay",
+    "wh_main_grn_greenskins",
+    "wh2_main_hef_high_elves",
+    "wh3_main_kho_khorne",
+    "wh3_main_ksl_kislev",
+    "wh2_main_lzd_lizardmen",
+    "wh_dlc08_nor_norsca",
+    "wh3_main_nur_nurgle",
+    "wh3_main_ogr_ogre_kingdoms",
+    "wh2_main_rogue",
+    "wh2_main_skv_skaven",
+    "wh3_main_sla_slaanesh",
+    "wh_main_emp_empire",
+    "wh2_dlc09_tmb_tomb_kings",
+    "wh3_main_tze_tzeentch",
+    "wh3_dlc29_nag_undead_legions",
+    "wh2_dlc11_cst_vampire_coast",
+    "wh_main_vmp_vampire_counts",
+    "wh_main_chs_chaos",
+    "wh_dlc05_wef_wood_elves",
+}
+
+for _, culture in ipairs(cultures) do
+    local skip_culture = mct_mod:add_new_option("skip_bonuses_" .. culture, "checkbox")
+    -- A loc key of the game: MCT shows the name in the language of the game
+    skip_culture:set_text("cultures_name_" .. culture)
+    skip_culture:set_tooltip_text("AI factions of this culture get no bonuses.")
+    skip_culture:set_default_value(false)
+    skip_culture:set_is_global(true)
+end

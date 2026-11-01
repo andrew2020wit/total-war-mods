@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.2.2'
+local mod_version = '9.3.1'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -42,7 +42,8 @@ local function get_setting(option_key)
         return default_value
     end
 
-    local option = mct_mod:get_option_by_key(option_key)
+    -- true: no warning in the log of MCT for a culture without an option
+    local option = mct_mod:get_option_by_key(option_key, true)
 
     if not option then
         return default_value
@@ -73,6 +74,12 @@ local function log(text)
 
     file:write(tostring(text) .. "\n")
     file:close()
+end
+
+-- The cultures are listed in the MCT file only. A culture from another mod has no option there,
+-- so it isn't skipped
+local function culture_is_skipped(culture)
+    return get_setting('skip_bonuses_' .. culture)
 end
 
 local function get_current_bundle_key(turn)
@@ -193,6 +200,11 @@ local function help_ai_each_turn(context)
     end
 
     if current_faction:is_human() then
+        return
+    end
+
+    if culture_is_skipped(current_faction:culture()) then
+        log('skip bonuses, faction: ' .. current_faction_name)
         return
     end
 
