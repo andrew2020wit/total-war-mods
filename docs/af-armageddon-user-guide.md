@@ -38,7 +38,7 @@ The version of the mod is shown in its title.
 | Character experience | Experience per turn number | 200 | Multiplied by the turn number, 0-5000 |
 | Character experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
-| Unit experience | Every n-th turn | 1 | 1 is every turn, 3 is only the turns divisible by 3, up to 50 |
+| Unit experience | Every n-th turn | 1 | How often a unit gets a whole extra rank, not just some experience: 1 is every turn, 3 is only the turns divisible by 3, up to 50 |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
 
 The settings are the same for all your campaigns. A change takes effect from the next turn of
