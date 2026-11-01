@@ -1,6 +1,6 @@
 -- Turn crash debug logger, "Total War Warhammer 3" modification
 
-local mod_version = '2.0.2'
+local mod_version = '2.0.3'
 local column_divider = '\t'
 
 local function log(event, context)
@@ -59,6 +59,10 @@ core:add_listener(
 )
 
 local function compute_character_log_text(character)
+    if character:is_null_interface() then
+        return "is_null_interface()"
+    end
+
     return " Name: " ..
             character:character_subtype_key() ..
             " Level: " ..
