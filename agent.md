@@ -10,9 +10,6 @@ Workshop. See [readme.md](readme.md) for the user-facing description of each mod
 mods/warhammer_3/
   !!af_armageddon/                         <- source for "AF Armageddon" (see af_armageddon-agent.md at repo root)
   !!af_armageddon.pack                     <- packed/distributable build of the mod above
-  af_general_logger/
-    script/campaign/mod/af_general_logger.lua
-  af_general_logger.pack
   af_turn_crash_debug_logger/
     script/campaign/mod/af_turn_crash_debug_logger.lua
   af_turn_crash_debug_logger.pack
@@ -61,9 +58,6 @@ project-wide only.
 - **AF Armageddon** (`!!af_armageddon`) — campaign difficulty mod; scales AI bonuses over
   time based on culture groups. Single player only: multiplayer isn't supported. See its
   dedicated [af_armageddon-agent.md](af_armageddon-agent.md) for details.
-- **General Logger** (`af_general_logger`) — writes a per-turn CSV
-  (`!!af_global_logger.csv`) with faction stats (income, treasury, regions, etc.), useful
-  for judging AI behavior over a campaign.
 - **Turn crash debug logger** (`af_turn_crash_debug_logger`) — writes debug info
   (`!af_turn_crash_debug_logger.csv`) to help pinpoint what's causing a repeated AI-turn
   crash, so the offending faction/character can then be killed via the in-game Lua console.
@@ -92,7 +86,7 @@ project-wide only.
 - Each mod keeps its own `mod_version` inside its script; bump it and update the relevant
   section of `readme.md` / `changelog.txt` when shipping a behavior change.
 - Runtime logs written by these mods land as files in the *game* folder (not this repo),
-  using relative `io.open` paths, e.g. `!!af_armageddon.txt`, `!!af_global_logger.csv`.
+  using relative `io.open` paths, e.g. `!!af_armageddon.txt`, `!af_turn_crash_debug_logger.csv`.
 - `mods/warhammer_3/!!af_armageddon.pack`'s effect-bundle data tables are authored directly
   in RPFM and are not present as loose files in this repo — see
   [af_armageddon-agent.md](af_armageddon-agent.md) for details before assuming all mod

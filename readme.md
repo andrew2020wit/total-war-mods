@@ -53,38 +53,6 @@ Not published on the Steam Workshop yet.
 
 [af-tweaker-agent.md](./af-tweaker-agent.md)
 
-## General Logger
-
-https://steamcommunity.com/sharedfiles/filedetails/?id=3665837500
-
-Mod "General Logger" creates '!!af_global_logger.csv' in the game folder.
-
-You can open it as a table with LibreOffice (separator: tab).
-
-Each turn it adds a row to this file.
-
-Columns:
-
-log_item_type (header/data),
-turn,
-faction,
-is_human,
-culture,
-subculture,
-regions_number,
-region_number_difference (lost/gained),
-imperium_level,
-is_vassal,
-income,
-net_income,
-treasury,
-treasury_percent,
-at_war,
-difficulty_level (player),
-faction_counter (all faction number),
-
-You can use it to judge about AI doing.
-
 ## Turn crash debug logger
 
 Some time you can get a repeated crash during AI turns.

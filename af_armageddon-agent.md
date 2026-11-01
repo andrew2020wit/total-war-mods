@@ -164,7 +164,6 @@ repository root, it prints `ALL PASSED` at the end:
 
 Sibling mods under `mods/warhammer_3/` follow the same layout
 (`script/campaign/mod/<name>.lua` + a matching `<name>.pack`):
-- `af_general_logger` — writes a per-turn CSV (`!!af_global_logger.csv`) of faction stats.
 - `af_turn_crash_debug_logger` — writes debug info to help diagnose repeated AI-turn crashes.
 
 Root `readme.md` documents all mods for end users (Steam Workshop descriptions); update it
