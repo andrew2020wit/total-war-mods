@@ -5,7 +5,7 @@ hands at the start of each of your turns:
 
 - it queues building upgrades;
 - it builds the buildings you marked as favorites;
-- it spends your characters' skill points.
+- it spends your characters' skill points according to the priorities you set.
 
 Each of these can be turned on or off.
 
