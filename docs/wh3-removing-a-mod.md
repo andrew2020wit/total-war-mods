@@ -1,5 +1,7 @@
 # Total War: Warhammer 3 — how to remove a mod that won't uninstall the usual way
 
+This guide is for mods installed locally, manually or through a third-party manager, not through the Steam Workshop.
+
 A mod usually "won't uninstall" because its file stayed on disk or in the launcher's list after you unsubscribed in Steam. Close the game and the launcher, then follow these steps.
 
 ## 1. Unsubscribe in Steam

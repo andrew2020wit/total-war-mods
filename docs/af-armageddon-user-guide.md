@@ -117,7 +117,7 @@ If it's too easy, raise the percents or move the start turns earlier.
 - The mod is made for single player campaigns. It isn't designed for multiplayer and doesn't
   support it.
 - Don't remove the mod from a running campaign: saves made with a mod may fail to load or crash
-  without it. See [how to remove a mod](wh3-removing-a-mod.md).
+  without it.
 - Turning a bonus off doesn't take back what the AI has already got.
 - The log, if it's turned on, is `!!af_armageddon.txt` in the game folder, next to the game
   itself. Each turn starts there with a section of all the settings. It grows fast, close to
