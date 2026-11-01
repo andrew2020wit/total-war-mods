@@ -56,8 +56,8 @@ project-wide only.
 ## The mods
 
 - **AF Armageddon** (`!!af_armageddon`) — campaign difficulty mod; scales AI bonuses over
-  time based on culture groups. Single player only: multiplayer isn't supported. See its
-  dedicated [af_armageddon-agent.md](af_armageddon-agent.md) for details.
+  time. Single player only: multiplayer isn't supported. See its dedicated
+  [af_armageddon-agent.md](af_armageddon-agent.md) for details.
 - **Turn crash debug logger** (`af_turn_crash_debug_logger`) — writes debug info
   (`!af_turn_crash_debug_logger.csv`) to help pinpoint what's causing a repeated AI-turn
   crash, so the offending faction/character can then be killed via the in-game Lua console.

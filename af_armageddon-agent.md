@@ -11,11 +11,9 @@ change.
 ## What the mod does
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
-the AI faction bonuses — but **only** if that faction's culture is in a different
-*culture group* than the human player's culture. Two independent settings, both off by
-default, widen that: `settings.bonus_for_same_culture` covers the player's own culture and
-`settings.bonus_for_same_culture_group` the other cultures of the player's group. The bonuses
-scale up over the course of
+the AI faction bonuses — but **only** if that faction's culture differs from the human
+player's culture. `settings.bonus_for_same_culture`, off by default, covers the player's own
+culture too. The bonuses scale up over the course of
 the campaign (later turns / more player regions → bigger bonus). It is meant to be used
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
@@ -36,10 +34,6 @@ Bonuses applied per eligible AI faction turn:
 - **Effect bundle** — one of five escalating "ai_buff" effect bundles
   (`af_armageddon_effect_bundle_ai_buff_1..5`) is applied based on turn number
   (see `effect_bundles_turns`); older bundles are removed first so only one is active.
-
-Culture groups (`culture_groups` table in the script) cluster related factions/subcultures
-(e.g. all Chaos god cultures, all Empire/Bretonnia/Dwarfs/Kislev/Cathay "Order" cultures,
-etc.) so that, for example, a Khorne player doesn't get bonuses against Tzeentch AI.
 
 ## Repository layout
 
@@ -88,7 +82,6 @@ defaults from the `settings` table in the script.
 | Option                            | Type     | Default | Meaning                                     |
 |-----------------------------------|----------|---------|---------------------------------------------|
 | `bonus_for_same_culture`          | checkbox | `false` | Bonuses for the player's own culture        |
-| `bonus_for_same_culture_group`    | checkbox | `false` | Bonuses for the rest of the player's group  |
 | `regions_percent`                 | slider   | `4`     | Percent of income per player region, 0-100  |
 | `time_percent`                    | slider   | `2`     | Percent of income per turn, 0-100           |
 | `experience_for_character`        | slider   | `200`   | Character XP multiplied by the turn number, 0-5000 |
@@ -134,17 +127,8 @@ tests check that.
   may not be loaded yet when the script file runs.
 - `script/mct/settings/` is loaded by MCT in the frontend and in the campaign, so that file
   must only define settings; `cm` isn't available there.
-- Logging is file-based, written into the game folder (relative `io.open`, no path):
-  - `!!af_armageddon.txt` — normal run log, written only with the `enable_logging` option.
-  - `!!af_armageddon-errors.txt` — error log, always written (used e.g. when a faction's
-    culture isn't found in `culture_group_ids`).
-- `culture_group_ids` is built once at load time by flattening `culture_groups`; when adding
-  a new faction/subculture (e.g. a new DLC race), add its culture key to the correct group
-  in `culture_groups`, not to `culture_group_ids` directly.
-- `the_same_culture_group` logs to the error file (not a crash) when a culture key is
-  missing from `culture_group_ids`, once per culture until the script loads again — treat that
-  log as "a faction culture is missing from `culture_groups` and needs to be added". A missing
-  culture is in no group, not even with another missing one, so such a faction gets the bonuses.
+- Logging is file-based: `!!af_armageddon.txt` in the game folder (relative `io.open`, no
+  path), written only with the `enable_logging` option.
 - Check `is_logging_enabled()` before a log line whose text takes calls to the game: `log`
   checks it too, but only after the arguments were already evaluated.
 - `add_agent_experience` takes effect later, so `level a => a` in the log doesn't mean the
@@ -159,7 +143,7 @@ tests check that.
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
 It covers the unit XP (when it's added and which units and factions get it), the character
-XP, the gold, the culture groups, the effect bundle of each turn and the settings: the MCT
+XP, the gold, the culture check, the effect bundle of each turn and the settings: the MCT
 file against the defaults of the script, work without MCT, the log option. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the
 MCT options. The local functions of the script aren't reachable, so it checks what they lead

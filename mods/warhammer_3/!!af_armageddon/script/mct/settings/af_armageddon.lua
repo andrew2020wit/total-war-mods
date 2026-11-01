@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.1.3'
+local mod_version = '9.2.1'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
@@ -19,12 +19,6 @@ same_culture:set_text("AI factions of your culture")
 same_culture:set_tooltip_text("AI factions of the same culture as the player get the bonuses too.")
 same_culture:set_default_value(false)
 same_culture:set_is_global(true)
-
-local same_culture_group = mct_mod:add_new_option("bonus_for_same_culture_group", "checkbox")
-same_culture_group:set_text("AI factions of your culture group")
-same_culture_group:set_tooltip_text("AI factions of the other cultures of the player's culture group get the bonuses too, for example Bretonnia when you play as the Empire.")
-same_culture_group:set_default_value(false)
-same_culture_group:set_is_global(true)
 
 mct_mod:add_new_section("gold", "Gold")
 
@@ -84,6 +78,6 @@ mct_mod:add_new_section("debug", "Debug")
 
 local logging = mct_mod:add_new_option("enable_logging", "checkbox")
 logging:set_text("Write a log file")
-logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder. Errors are always written to !!af_armageddon-errors.txt.")
+logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder.")
 logging:set_default_value(false)
 logging:set_is_global(true)

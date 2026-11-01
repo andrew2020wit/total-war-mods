@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.1.3'
+local mod_version = '9.2.1'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -9,7 +9,6 @@ local mct_mod_key = 'af_armageddon'
 local settings = {
     enable_logging = false,
     bonus_for_same_culture = false,
-    bonus_for_same_culture_group = false,
     regions_percent = 4,
     time_percent = 2,
     experience_for_character = 200,
@@ -29,67 +28,6 @@ local effect_bundles = {
 
 -- 40 day - apply_effect_bundle bundle_ai_buff_5
 local effect_bundles_turns = { 40 , 35, 30, 20, 10 }
-
-local culture_groups = {
-    {
-        "wh_main_emp_empire",
-        "wh_main_brt_bretonnia",
-        "wh_main_dwf_dwarfs",
-        "wh3_main_ksl_kislev",
-        "wh3_main_pro_ksl_kislev",
-        "wh3_main_cth_cathay",
-    },
-    {
-        "wh2_main_hef_high_elves",
-        "wh_dlc05_wef_wood_elves",
-    },
-    {
-        "wh_main_chs_chaos",
-        "wh3_main_dae_daemons",
-        "wh3_main_kho_khorne",
-        "wh3_main_nur_nurgle",
-        "wh3_main_sla_slaanesh",
-        "wh3_main_tze_tzeentch",
-        "wh_dlc08_nor_norsca",
-        "wh_dlc03_bst_beastmen",        
-    },
-    {
-        "wh3_dlc23_chd_chaos_dwarfs",
-    },
-    {
-        "wh2_main_def_dark_elves"
-    },
-    {
-        "wh2_main_skv_skaven"
-    },
-    {
-        "wh2_dlc09_tmb_tomb_kings",
-        "wh_main_vmp_vampire_counts",
-        "wh2_dlc11_cst_vampire_coast",
-        "wh3_dlc29_nag_undead_legions",
-    },
-    {
-        "wh3_main_ogr_ogre_kingdoms",
-    },
-    {
-        "wh2_main_lzd_lizardmen",
-    },
-    {
-        "wh_main_grn_greenskins",
-    },
-    {
-        "wh2_main_rogue",
-    }
-}
-
-local culture_group_ids = {}
-local logged_missing_cultures = {}
-
-for group_id, group in ipairs(culture_groups) do
-    for _, culture in ipairs(group) do
-        culture_group_ids[culture] = group_id
-    end
-end
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -125,8 +63,12 @@ local function is_logging_enabled()
     return get_setting('enable_logging')
 end
 
-local function append_line(file_name, text)
-    local file = io.open(file_name, "a")
+local function log(text)
+    if not is_logging_enabled() then
+        return
+    end
+
+    local file = io.open('!!af_armageddon.txt', "a")
 
     if not file then return end
 
@@ -134,43 +76,8 @@ local function append_line(file_name, text)
     file:close()
 end
 
-local function log(text)
-    if is_logging_enabled() then
-        append_line('!!af_armageddon.txt', text)
-    end
-end
-
-local function log_errors(text)
-    append_line('!!af_armageddon-errors.txt', text)
-end
-
--- Once per culture: it would repeat on the turn of every faction otherwise
-local function log_missing_culture(culture)
-    if culture_group_ids[culture] or logged_missing_cultures[culture] then
-        return
-    end
-
-    logged_missing_cultures[culture] = true
-    log_errors('Faction group not found, faction: ' .. culture)
-end
-
-local function the_same_culture_group(culture_a, culture_b)
-    log_missing_culture(culture_a)
-    log_missing_culture(culture_b)
-
-    local id_a = culture_group_ids[culture_a]
-
-    return id_a ~= nil and id_a == culture_group_ids[culture_b]
-end
-
 local function culture_gets_bonuses(culture, player_culture)
-    if culture == player_culture then
-        return get_setting('bonus_for_same_culture')
-    end
-
-    -- Checked first, as this is what logs a culture missing from the groups
-    return not the_same_culture_group(culture, player_culture)
-        or get_setting('bonus_for_same_culture_group')
+    return culture ~= player_culture or get_setting('bonus_for_same_culture')
 end
 
 local function get_current_bundle_key(turn)

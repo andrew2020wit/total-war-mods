@@ -9,7 +9,7 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-By default only the factions outside your culture group get them.
+By default only the factions of other cultures get them.
 
 ## Installation
 
@@ -24,15 +24,12 @@ You can add the mod to a running campaign. Don't remove it afterwards, see
 
 ## Settings
 
-![The settings window](../imgs/armageddon/armageddon-settings.png)
-
 Open the Mod Configuration Tool window in the game and choose **AF Armageddon**, then **Settings**.
 The version of the mod is shown in its title.
 
 | Section | Option | Default | What it does |
 |---|---|---:|---|
 | Who gets the bonuses | AI factions of your culture | Off | They get the bonuses too |
-| Who gets the bonuses | AI factions of your culture group | Off | The other cultures of your group get them too |
 | Gold | Percent of income per player region | 4 | Each of your regions adds this share of the AI income, 0-100 |
 | Gold | Percent of income per turn | 2 | Each turn of the campaign adds this share of the AI income, 0-100 |
 | Character experience | Experience per turn number | 200 | Multiplied by the turn number, 0-5000 |
@@ -46,31 +43,17 @@ an AI faction.
 
 ## Who gets the bonuses
 
-An AI faction gets the bonuses when its culture is outside your culture group. Only the culture
-counts: alliances, vassals and wars change nothing. Rebels never get them.
+An AI faction gets the bonuses when its culture differs from yours. Only the culture counts:
+alliances, vassals and wars change nothing. Rebels never get them.
 
-The two options in the first section widen this. For example, when you play as the Empire:
+The option **AI factions of your culture** gives the bonuses to the factions of your own culture
+too. For example, when you play as the Empire:
 
-| Faction | By default | With "your culture group" | With "your culture" |
-|---|---|---|---|
-| Greenskins | Yes | Yes | Yes |
-| Dwarfs | No | Yes | No |
-| Another Empire faction | No | No | Yes |
-
-The two options are independent, so you can turn on both.
-
-The culture groups are:
-
-- Empire, Bretonnia, Dwarfs, Kislev, Cathay;
-- High Elves, Wood Elves;
-- Warriors of Chaos, Daemons of Chaos, Khorne, Nurgle, Slaanesh, Tzeentch, Norsca, Beastmen;
-- Tomb Kings, Vampire Counts, Vampire Coast, Undead Legions.
-
-Chaos Dwarfs, Dark Elves, Skaven, Ogre Kingdoms, Lizardmen, Greenskins and Rogue Armies are
-groups of their own.
-
-A culture from a new DLC or another mod that isn't on this list belongs to no group, so it gets
-the bonuses, and it's written once to the error file.
+| Faction | By default | With "your culture" |
+|---|---|---|
+| Greenskins | Yes | Yes |
+| Dwarfs | Yes | Yes |
+| Another Empire faction | No | Yes |
 
 ## What the AI gets
 
@@ -130,7 +113,7 @@ Balance depends on many things: mods, factions, random events, your skills and y
 you can expect is that the difficulty gradually grows.
 
 If it's too hard, lower the two gold percents or move the start turns later. If it's too easy,
-raise them, or give the bonuses to your culture and your culture group too.
+raise them, or give the bonuses to your culture too.
 
 ## Good to know
 
@@ -139,7 +122,6 @@ raise them, or give the bonuses to your culture and your culture group too.
 - Don't remove the mod from a running campaign: saves made with a mod may fail to load or crash
   without it. See [how to remove a mod](wh3-removing-a-mod.md).
 - Turning a bonus off doesn't take back what the AI has already got.
-- The mod's files are in the game folder, next to the game itself:
-  - `!!af_armageddon.txt` — the log, if it's turned on;
-  - `!!af_armageddon-errors.txt` — errors, if there were any.
-- The log grows fast, close to 1 MB per turn in a late game. Turn it on only to find a problem.
+- The log, if it's turned on, is `!!af_armageddon.txt` in the game folder, next to the game
+  itself. It grows fast, close to 1 MB per turn in a late game, so turn it on only to find a
+  problem.

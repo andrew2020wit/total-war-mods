@@ -84,12 +84,11 @@ end
 -- player_regions, rank, no_general, null_unit }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
--- last_gold, bundles (key by turn) and active_bundles, plus the logs in log and errors, and in
--- rank_reads how many times the rank of a unit was read.
+-- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
+-- how many times the rank of a unit was read.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
-    local err_name = file_prefix .. 'errors.txt'
-    os.remove(log_name); os.remove(err_name)
+    os.remove(log_name)
 
     local turn = 0
     local turn_listener
@@ -104,11 +103,8 @@ local function play(world)
 
     env.io = {
         open = function(name, mode)
-            local map = {
-                ['!!af_armageddon.txt'] = log_name,
-                ['!!af_armageddon-errors.txt'] = err_name
-            }
-            return io.open(map[name], mode)
+            assert(name == '!!af_armageddon.txt', name)
+            return io.open(log_name, mode)
         end
     }
 
@@ -223,21 +219,18 @@ local function play(world)
         bundles = bundles,
         active_bundles = active_bundles,
         rank_reads = rank_reads,
-        log = read_file(log_name),
-        errors = read_file(err_name)
+        log = read_file(log_name)
     }
 end
 
 local function check_turns(name, world, expected)
     local result = play(world)
     check(name, result.xp_turns == expected, result.xp_turns)
-    check(name .. ': no errors', result.errors == '', result.errors)
 end
 
 local function check_character_xp(name, world, expected)
     local result = play(world)
     check(name, result.character_xp == expected, result.character_xp)
-    check(name .. ': no errors', result.errors == '', result.errors)
 end
 
 -- The turn bonuses are the only sign of the culture check outside the script.
@@ -249,7 +242,6 @@ local function check_culture(name, ai_culture, player_culture, gets_bonuses, set
         player_culture = player_culture
     })
     check(name, (result.gold_count > 0) == gets_bonuses, result.gold_count)
-    check(name .. ': no errors', result.errors == '', result.errors)
 end
 
 print('-- unit experience')
@@ -285,9 +277,9 @@ check_turns('no experience at the top rank', { last_turn = 12, rank = 9 }, '')
 check_turns('one rank below the top still gets it', { last_turn = 10, rank = 8 }, '10')
 check_turns('no experience for an army without a general', { last_turn = 12, no_general = true }, '')
 check_turns('null units are skipped', { last_turn = 12, null_unit = true }, '')
-check_turns('no experience for the culture group of the player', {
+check_turns('no experience for the culture of the player', {
     last_turn = 12,
-    ai_culture = 'wh_main_dwf_dwarfs'
+    ai_culture = 'wh_main_emp_empire'
 }, '')
 
 print('-- character experience')
@@ -309,65 +301,35 @@ check_turns('the units do not depend on the start turn of the characters', {
     last_turn = 11
 }, '10,11')
 
-print('-- culture groups')
+print('-- cultures')
 
-check_culture('the same group: Chaos and Khorne', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', false)
-check_culture('the same group, the other way', 'wh3_main_kho_khorne', 'wh_main_chs_chaos', false)
-check_culture('different groups: High Elves and Tomb Kings', 'wh2_main_hef_high_elves', 'wh2_dlc09_tmb_tomb_kings', true)
-check_culture('the same culture: Ogres', 'wh3_main_ogr_ogre_kingdoms', 'wh3_main_ogr_ogre_kingdoms', false)
+local empire = 'wh_main_emp_empire'
+local same_culture_on = { bonus_for_same_culture = true }
 
-do
-    local result = play({ last_turn = 1, ai_culture = 'unknown_culture' })
-    check('an unknown culture is logged', result.errors:find('unknown_culture', 1, true) ~= nil, result.errors)
-    check('an unknown culture still gets bonuses', result.gold_count > 0, result.gold_count)
-
-    local repeated = play({ last_turn = 3, ai_culture = 'unknown_culture' })
-    check('an unknown culture is logged once', select(2, repeated.errors:gsub('unknown_culture', '')) == 1, repeated.errors)
-
-    local both = play({ last_turn = 1, ai_culture = 'unknown_ai', player_culture = 'unknown_player' })
-    check('two unknown cultures are not one group', both.gold_count > 0, both.gold_count)
-    check('both unknown cultures are logged',
-        both.errors:find('unknown_ai', 1, true) ~= nil and both.errors:find('unknown_player', 1, true) ~= nil, both.errors)
-
-    local group_on = play({ settings = { bonus_for_same_culture_group = true }, last_turn = 1, ai_culture = 'unknown_culture' })
-    check('an unknown culture is logged with the group option on',
-        group_on.errors:find('unknown_culture', 1, true) ~= nil, group_on.errors)
-end
-
-print('-- bonuses for the culture group of the player')
-
-local same_group_on = { bonus_for_same_culture_group = true }
-
-check_culture('the same group gets bonuses', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', true, same_group_on)
-check_culture('different groups still get them', 'wh2_main_hef_high_elves', 'wh2_dlc09_tmb_tomb_kings', true, same_group_on)
-check_culture('the same culture still gets none', 'wh3_main_ogr_ogre_kingdoms', 'wh3_main_ogr_ogre_kingdoms', false, same_group_on)
-
-do
-    local result = play({
-        settings = same_group_on,
-        last_turn = 10,
-        ai_culture = 'wh_main_dwf_dwarfs'
-    })
-    check('the same group gets gold every turn', result.gold_count == 10, result.gold_count)
-    check('the same group gets unit experience', result.xp_turns == '10', result.xp_turns)
-    check('the same group gets character experience', result.character_xp == '10:2000', result.character_xp)
-    check('the same group gets the effect bundle',
-        result.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1', result.bundles[10])
-end
+check_culture('another culture gets bonuses', 'wh_main_grn_greenskins', empire, true)
+check_culture('another culture of the Order gets them', 'wh_main_dwf_dwarfs', empire, true)
+check_culture('another culture of Chaos gets them', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', true)
+check_culture('a culture from another mod gets them', 'unknown_culture', empire, true)
+check_culture('the same culture from another mod gets none', 'unknown_culture', 'unknown_culture', false)
 
 print('-- bonuses for the culture of the player')
 
-local empire = 'wh_main_emp_empire'
-local dwarfs = 'wh_main_dwf_dwarfs'
-local same_culture_on = { bonus_for_same_culture = true }
-local both_on = { bonus_for_same_culture = true, bonus_for_same_culture_group = true }
-
 check_culture('off: the same culture gets none', empire, empire, false)
 check_culture('on: the same culture gets bonuses', empire, empire, true, same_culture_on)
-check_culture('on: the rest of the group gets none', dwarfs, empire, false, same_culture_on)
-check_culture('on: different groups still get them', 'wh_main_grn_greenskins', empire, true, same_culture_on)
-check_culture('both on: the same culture gets bonuses', empire, empire, true, both_on)
-check_culture('both on: the rest of the group gets bonuses', dwarfs, empire, true, both_on)
+check_culture('on: another culture still gets them', 'wh_main_grn_greenskins', empire, true, same_culture_on)
+
+do
+    local result = play({
+        settings = same_culture_on,
+        last_turn = 10,
+        ai_culture = empire
+    })
+    check('the same culture gets gold every turn', result.gold_count == 10, result.gold_count)
+    check('the same culture gets unit experience', result.xp_turns == '10', result.xp_turns)
+    check('the same culture gets character experience', result.character_xp == '10:2000', result.character_xp)
+    check('the same culture gets the effect bundle',
+        result.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1', result.bundles[10])
+end
 
 print('-- effect bundles')
 
@@ -481,10 +443,6 @@ do
 
     local version = mod_source:match("mod_version = '([%d%.]+)'")
     check('the start line has the version', on.log:find('v. ' .. version, 1, true) ~= nil)
-
-    local unknown = play({ last_turn = 1, ai_culture = 'unknown_culture' })
-    check('errors are written with the log off',
-        unknown.log == '' and unknown.errors:find('unknown_culture', 1, true) ~= nil, unknown.errors)
 end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))
