@@ -149,8 +149,9 @@ tests check that.
   checks it too, but only after the arguments were already evaluated.
 - `add_agent_experience` takes effect later, so `level a => a` in the log doesn't mean the
   character got no experience: on 2026-11-01 all 1371 lines of a turn looked like that. The rank
-  of a unit changes at once. Generic lords stay at level 0 in that log, about a third of all
-  lines, while the other characters are at level 6 and above.
+  of a unit changes at once. 454 of those lines were generic lords and heralds at level 0, while
+  nearly all the others were at level 6 and above. The log of one turn can't say why, it may be
+  garrison commanders: compare the characters over several turns before drawing conclusions.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
 
