@@ -120,5 +120,5 @@ If it's too easy, raise the percents or move the start turns earlier.
   without it. See [how to remove a mod](wh3-removing-a-mod.md).
 - Turning a bonus off doesn't take back what the AI has already got.
 - The log, if it's turned on, is `!!af_armageddon.txt` in the game folder, next to the game
-  itself. It grows fast, close to 1 MB per turn in a late game, so turn it on only to find a
-  problem.
+  itself. Each turn starts there with a section of all the settings. It grows fast, close to
+  1 MB per turn in a late game, so turn it on only to find a problem.

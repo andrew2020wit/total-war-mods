@@ -81,7 +81,7 @@ local function read_script_defaults()
 end
 
 -- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_is_human, ai_is_rebel,
--- ai_culture, player_regions, rank, no_general, null_unit }
+-- ai_culture, player_regions, rank, no_general, null_unit, faction_turns }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
 -- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
@@ -110,6 +110,15 @@ local function play(world)
 
     local overrides = world.settings or {}
 
+    local function model_option(option_key)
+        return {
+            get_finalized_setting = function()
+                if overrides[option_key] ~= nil then return overrides[option_key] end
+                return mct_options[option_key].default
+            end
+        }
+    end
+
     if not world.no_mct then
         env.get_mct = function()
             return {
@@ -123,7 +132,12 @@ local function play(world)
                                 return nil
                             end
                             assert(mct_options[option_key], 'no such MCT option: ' .. option_key)
-                            return { get_finalized_setting = function() return overrides[option_key] end }
+                            return model_option(option_key)
+                        end,
+                        get_options = function()
+                            local options = {}
+                            for option_key in pairs(mct_options) do options[option_key] = model_option(option_key) end
+                            return options
                         end
                     }
                 end
@@ -210,7 +224,9 @@ local function play(world)
         for key, value in pairs(world.changes and world.changes[current] or {}) do
             overrides[key] = value
         end
-        turn_listener({ faction = function() return ai end })
+        for _ = 1, world.faction_turns or 1 do
+            turn_listener({ faction = function() return ai end })
+        end
     end
 
     return {
@@ -459,6 +475,32 @@ do
 
     local version = mod_source:match("mod_version = '([%d%.]+)'")
     check('the start line has the version', on.log:find('v. ' .. version, 1, true) ~= nil)
+
+    local logged = play({
+        settings = { enable_logging = true, regions_percent = 10, skip_bonuses_wh_main_emp_empire = true },
+        last_turn = 2,
+        faction_turns = 3
+    })
+    check('the settings are logged once per turn', select(2, logged.log:gsub('settings, turn ', '')) == 2, logged.log)
+    check('the log has a changed setting', logged.log:find('regions_percent: 10', 1, true) ~= nil, logged.log)
+    check('the log has a default setting', logged.log:find('time_percent: 2', 1, true) ~= nil, logged.log)
+    check('the log has a ticked culture',
+        logged.log:find('skip_bonuses_wh_main_emp_empire: true', 1, true) ~= nil, logged.log)
+    check('the log has a culture that is not ticked',
+        logged.log:find('skip_bonuses_wh_main_grn_greenskins: false', 1, true) ~= nil, logged.log)
+
+    for key in pairs(mct_options) do
+        check('the log has the option ' .. key, logged.log:find(key .. ': ', 1, true) ~= nil)
+    end
+
+    check('the settings are sorted',
+        logged.log:find('enable_logging: ', 1, true) < logged.log:find('regions_percent: ', 1, true))
+    check('the settings go before the bonuses',
+        logged.log:find('settings, turn 1 ', 1, true) < logged.log:find('gold_bonus', 1, true))
+
+    local turned_on = play({ changes = { [2] = { enable_logging = true } }, last_turn = 2 })
+    check('the log turned on during the campaign gets the settings',
+        turned_on.log:find('settings, turn 2 ', 1, true) ~= nil, turned_on.log)
 end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))

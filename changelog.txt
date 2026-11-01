@@ -1,3 +1,4 @@
+2026.11.01 AF Armageddon v9.3.2: the log starts each turn with a section of all the settings
 2026.11.01 AF Armageddon v9.3.1: new settings section: the bonuses can be turned off for each culture
 2026.11.01 AF Armageddon v9.2.2: culture no longer matters: all AI factions get the bonuses, the setting bonus_for_same_culture is gone
 2026.11.01 AF Armageddon v9.2.1: culture groups are removed: all AI factions of other cultures get the bonuses, the setting bonus_for_same_culture_group and the error log are gone

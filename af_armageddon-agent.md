@@ -147,6 +147,10 @@ log on each turn of such a faction.
   must only define settings; `cm` isn't available there.
 - Logging is file-based: `!!af_armageddon.txt` in the game folder (relative `io.open`, no
   path), written only with the `enable_logging` option.
+- `log_settings` writes all the settings to the log once per turn, on the first
+  `FactionTurnStart` of that turn. It takes the keys from `mct_mod:get_options()`, as the
+  script doesn't know the cultures, and the values from `get_setting`, so the log shows what
+  the mod really uses. New options get there on their own.
 - Check `is_logging_enabled()` before a log line whose text takes calls to the game: `log`
   checks it too, but only after the arguments were already evaluated.
 - `add_agent_experience` takes effect later, so `level a => a` in the log doesn't mean the

@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.3.1'
+local mod_version = '9.3.2'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -28,15 +28,20 @@ local effect_bundles = {
 -- 40 day - apply_effect_bundle bundle_ai_buff_5
 local effect_bundles_turns = { 40 , 35, 30, 20, 10 }
 
-local function get_setting(option_key)
-    local default_value = settings[option_key]
+local settings_logged_turn = 0
 
+local function get_mct_mod()
     -- Each player has own values of global options, and different values would be a desync
     if not get_mct or cm:is_multiplayer() then
-        return default_value
+        return nil
     end
 
-    local mct_mod = get_mct():get_mod_by_key(mct_mod_key)
+    return get_mct():get_mod_by_key(mct_mod_key)
+end
+
+local function get_setting(option_key)
+    local default_value = settings[option_key]
+    local mct_mod = get_mct_mod()
 
     if not mct_mod then
         return default_value
@@ -80,6 +85,41 @@ end
 -- so it isn't skipped
 local function culture_is_skipped(culture)
     return get_setting('skip_bonuses_' .. culture)
+end
+
+-- Once per turn, on the first faction. The keys come from MCT, as the cultures are listed only there
+local function log_settings()
+    local current_turn = cm:turn_number()
+
+    if current_turn == settings_logged_turn or not is_logging_enabled() then
+        return
+    end
+
+    settings_logged_turn = current_turn
+
+    local mct_mod = get_mct_mod()
+
+    if not mct_mod then
+        return
+    end
+
+    local keys = {}
+
+    for key in pairs(mct_mod:get_options()) do
+        keys[#keys + 1] = key
+    end
+
+    table.sort(keys)
+
+    local lines = { '=========== settings, turn ' .. tostring(current_turn) .. ' ===============' }
+
+    for _, key in ipairs(keys) do
+        lines[#lines + 1] = key .. ': ' .. tostring(get_setting(key))
+    end
+
+    lines[#lines + 1] = '===================='
+
+    log(table.concat(lines, '\n'))
 end
 
 local function get_current_bundle_key(turn)
@@ -191,6 +231,8 @@ local function add_xp_to_characters(faction_name)
 end
 
 local function help_ai_each_turn(context)
+    log_settings()
+
     local current_faction = context:faction()
     local current_faction_name = current_faction:name()
     local current_turn = cm:turn_number()
