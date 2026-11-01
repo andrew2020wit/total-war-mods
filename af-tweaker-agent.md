@@ -6,8 +6,10 @@ campaign tweaks, each switched on and tuned from a settings window.
 This file is for developers. What a player needs to know is in the
 [user guide](docs/af-tweaker-user-guide.md): update it when the behaviour or the settings change.
 
-Not published on the Steam Workshop yet. First in-game run was on 2026-10-31 — see
-[Verification status](#verification-status) for what it did and didn't confirm.
+Steam Workshop page: https://steamcommunity.com/sharedfiles/filedetails/?id=3831853119
+
+First in-game run was on 2026-10-31 — see [Verification status](#verification-status) for what
+it did and didn't confirm.
 
 ## What the mod does
 

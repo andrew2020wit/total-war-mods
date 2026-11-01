@@ -11,10 +11,11 @@ Each of these can be turned on or off.
 
 ## Installation
 
-1. Subscribe to [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
+1. Subscribe to [AF Tweaker](https://steamcommunity.com/sharedfiles/filedetails/?id=3831853119).
+2. Subscribe to [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
    (MCT). It provides the settings window. Without it the mod still works with the default
    settings, but you can't change them.
-2. Enable AF Tweaker and MCT in the launcher. The order of the mods doesn't matter.
+3. Enable both in the launcher. The order of the mods doesn't matter.
 
 The mod keeps nothing in your saves, so you can add it to a running campaign. Automatic skills
 are on by default, so read [the note about them](#automatic-character-skills) first.

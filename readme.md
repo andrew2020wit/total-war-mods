@@ -43,11 +43,11 @@ The only thing which you can expect that this mod gradually increases difficulty
 
 ## AF Tweaker
 
+[https://steamcommunity.com/sharedfiles/filedetails/?id=3831853119](https://steamcommunity.com/sharedfiles/filedetails/?id=3831853119)
+
 Campaign mod that automates routine work at the start of your turn: it upgrades buildings, and
 builds your favorite buildings and spends skill points by the priorities you set.
 Each feature can be turned off, and it's compatible with other mods, including Radious.
-
-Not published on the Steam Workshop yet.
 
 [User guide](./docs/af-tweaker-user-guide.md)
 
