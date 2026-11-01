@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.5.3'
+local mod_version = '0.6.0'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -22,12 +22,14 @@ local settings = {
 local settlement_context = 'CcoCampaignSettlement'
 local slot_context = 'CcoCampaignBuildingSlot'
 
+-- Favorite buildings and skills: no stars, or from one star to this many
+local max_priority = 3
+
 -- Lives in the game folder, not in a save: favorites are shared by all campaigns
 local favorites_file_name = '!!af_tweaker-favorites.txt'
 local popup_name = 'building_construction_popup'
 local favorite_button_name = 'af_tweaker_favorite_button'
-local favorite_button_template = 'ui/templates/round_small_button_toggle'
-local favorite_button_icon = 'ui/skins/default/af_tweaker_favorite_star.png'
+local favorite_button_template = 'ui/templates/round_small_button'
 
 local character_context = 'CcoCampaignCharacter'
 
@@ -37,8 +39,8 @@ local skill_panel_name = 'character_details_panel_skills'
 local skill_button_name = 'af_tweaker_skill_priority_button'
 local skill_button_template = 'ui/templates/round_extra_small_button'
 local skill_button_transparent_image = 'ui/skins/default/1x1_transparent_white.png'
-local skill_max_priority = 3
 
+-- In the order of adding: { key, priority }
 local favorites = {}
 local favorite_button_key = nil
 local favorite_button_slot_id = nil
@@ -218,6 +220,10 @@ local function uses_pooled_resources(region_cqi, slot_index, level)
     )
 end
 
+local function get_slot_key(region_cqi, slot_index)
+    return region_cqi .. ':' .. slot_index
+end
+
 local function is_level_available(region_cqi, slot_index, level)
     local slot = slot_expression(slot_index)
 
@@ -250,10 +256,7 @@ end
 -- building per round: per province for development points, per faction for resources.
 -- Returns the cost if the building was queued, or nil and true if it waits for the next round.
 local function queue_level(region, region_cqi, slot_index, level, level_key, cycle, is_favorite)
-    local slot_key = region_cqi .. ':' .. slot_index
-
-    -- The game can be slower than a round, and a refused command must not repeat each round
-    if cycle.queued_slots[slot_key] or not is_level_available(region_cqi, slot_index, level) then
+    if not is_level_available(region_cqi, slot_index, level) then
         return nil
     end
 
@@ -292,7 +295,7 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
         level .. '.IssueCommandForBuildingBrowser(' .. slot_expression(slot_index) .. ')'
     )
 
-    cycle.queued_slots[slot_key] = true
+    cycle.queued_slots[get_slot_key(region_cqi, slot_index)] = true
     cycle.budget = cycle.budget - cost
     cycle.spent = cycle.spent + cost
 
@@ -360,16 +363,30 @@ local function strip_bom(line)
     return (string.gsub(line, '^\239\187\191', ''))
 end
 
+-- An icon exists only for the valid values
+local function parse_priority_line(line)
+    local key, priority = string.match(strip_bom(line), '^%s*(.-)%s*=%s*(%d+)%s*$')
+
+    if key then
+        return key, math.min(tonumber(priority), max_priority)
+    end
+end
+
 local function load_favorites()
     local file = io.open(favorites_file_name, "r")
 
     if not file then return end
 
     for line in file:lines() do
-        local key = string.match(strip_bom(line), '^%s*(.-)%s*$')
+        local key, priority = parse_priority_line(line)
 
-        if key ~= '' then
-            table.insert(favorites, key)
+        -- Up to version 0.5 a favorite had one star, and the line held only the key
+        if not key then
+            key, priority = string.match(strip_bom(line), '^%s*(.-)%s*$'), 1
+        end
+
+        if key ~= '' and priority > 0 then
+            table.insert(favorites, { key = key, priority = priority })
         end
     end
 
@@ -384,33 +401,45 @@ local function save_favorites()
         return
     end
 
-    file:write(table.concat(favorites, "\n") .. "\n")
+    for _, favorite in ipairs(favorites) do
+        file:write(favorite.key .. '=' .. favorite.priority .. "\n")
+    end
+
     file:close()
 end
 
-local function find_favorite_index(level_key)
-    for index, key in ipairs(favorites) do
-        if key == level_key then
-            return index
+local function find_favorite(level_key)
+    for index, favorite in ipairs(favorites) do
+        if favorite.key == level_key then
+            return favorite, index
         end
     end
 
     return nil
 end
 
-local function toggle_favorite(level_key)
-    local index = find_favorite_index(level_key)
+local function get_favorite_priority(level_key)
+    local favorite = find_favorite(level_key)
 
-    if index then
-        table.remove(favorites, index)
+    return favorite and favorite.priority or 0
+end
+
+-- None, 1, 2, 3, none. A favorite keeps its place in the list while it stays a favorite.
+local function change_favorite_priority(level_key)
+    local favorite, index = find_favorite(level_key)
+
+    if not favorite then
+        table.insert(favorites, { key = level_key, priority = 1 })
+    elseif favorite.priority < max_priority then
+        favorite.priority = favorite.priority + 1
     else
-        table.insert(favorites, level_key)
+        table.remove(favorites, index)
     end
 
     save_favorites()
 
     if is_logging_enabled() then
-        log((index and 'favorite removed: ' or 'favorite added: ') .. building_title(level_key))
+        log('favorite priority: ' .. building_title(level_key) .. ' = ' .. get_favorite_priority(level_key))
     end
 end
 
@@ -418,15 +447,37 @@ end
 local function get_valid_favorites()
     local valid_favorites = {}
 
-    for _, key in ipairs(favorites) do
-        if common.get_context_value('CcoBuildingLevelRecord', key, 'Key') == key then
-            table.insert(valid_favorites, key)
+    for _, favorite in ipairs(favorites) do
+        if common.get_context_value('CcoBuildingLevelRecord', favorite.key, 'Key') == favorite.key then
+            table.insert(valid_favorites, favorite)
         else
-            log('unknown favorite building: ' .. key)
+            log('unknown favorite building: ' .. favorite.key)
         end
     end
 
     return valid_favorites
+end
+
+-- One tier per priority, the highest first. Inside a tier favorites go in the order of adding.
+local function get_favorite_tiers()
+    local valid_favorites = get_valid_favorites()
+    local tiers = {}
+
+    for priority = max_priority, 1, -1 do
+        local keys = {}
+
+        for _, favorite in ipairs(valid_favorites) do
+            if favorite.priority == priority then
+                table.insert(keys, favorite.key)
+            end
+        end
+
+        if #keys > 0 then
+            table.insert(tiers, { priority = priority, keys = keys, pass = {} })
+        end
+    end
+
+    return tiers
 end
 
 local function is_slot_free(region_cqi, slot_index)
@@ -458,12 +509,12 @@ local function is_favorite_buildable(region_cqi, slot_index, level)
     )
 end
 
-local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, built_in_region)
+local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, tier, built_in_region)
     if not is_slot_free(region_cqi, slot_index) then
         return
     end
 
-    for _, level_key in ipairs(cycle.favorites) do
+    for _, level_key in ipairs(tier.keys) do
         local level = favorite_expression(slot_index, level_key)
 
         if not built_in_region[level_key] and is_favorite_buildable(region_cqi, slot_index, level) then
@@ -479,7 +530,7 @@ local function build_favorite_in_slot(region, region_cqi, slot_index, cycle, bui
                 cycle.built = cycle.built + 1
 
                 if is_logging_enabled() then
-                    log_queued('favorite ' .. building_title(level_key), region, cost, cycle)
+                    log_queued('favorite ' .. building_title(level_key) .. ', priority: ' .. tier.priority, region, cost, cycle)
                 end
 
                 return
@@ -506,7 +557,10 @@ local function for_each_slot(region, cycle, handler)
             break
         end
 
-        handler(region, region_cqi, slot_index, cycle)
+        -- The game can be slower than a round or a tier, and a refused command must not repeat
+        if not cycle.queued_slots[get_slot_key(region_cqi, slot_index)] then
+            handler(region, region_cqi, slot_index, cycle)
+        end
     end
 end
 
@@ -534,17 +588,26 @@ local function for_each_region(faction, cycle, pass, region_handler)
     end
 end
 
+-- A tier goes through all regions before the next one, so the priorities hold when the money
+-- runs out. It starts only when nothing above it waits, or it would take the slot of a building
+-- with more stars.
 local function build_favorites(faction, cycle)
-    for_each_region(faction, cycle, cycle.favorite_pass, function(region)
-        -- Commands are asynchronous, the game doesn't see this region's new buildings yet
-        local built_in_region = cycle.built_in_regions[region:name()] or {}
+    for _, tier in ipairs(cycle.favorite_tiers) do
+        for_each_region(faction, cycle, tier.pass, function(region)
+            -- Commands are asynchronous, the game doesn't see this region's new buildings yet
+            local built_in_region = cycle.built_in_regions[region:name()] or {}
 
-        cycle.built_in_regions[region:name()] = built_in_region
+            cycle.built_in_regions[region:name()] = built_in_region
 
-        for_each_slot(region, cycle, function(_, region_cqi, slot_index)
-            build_favorite_in_slot(region, region_cqi, slot_index, cycle, built_in_region)
+            for_each_slot(region, cycle, function(_, region_cqi, slot_index)
+                build_favorite_in_slot(region, region_cqi, slot_index, cycle, tier, built_in_region)
+            end)
         end)
-    end)
+
+        if cycle.round.has_deferred then
+            return
+        end
+    end
 end
 
 local function upgrade_buildings(faction, cycle)
@@ -582,9 +645,7 @@ local function run_building_round(faction_name, cycle)
 
     cycle.round = new_round()
 
-    if #cycle.favorites > 0 then
-        build_favorites(faction, cycle)
-    end
+    build_favorites(faction, cycle)
 
     if cycle.upgrades_enabled and not cycle.round.has_deferred then
         upgrade_buildings(faction, cycle)
@@ -604,14 +665,13 @@ local function run_turn_start_cycle(faction_name)
         spent = 0,
         upgraded = 0,
         built = 0,
-        favorites = {},
+        favorite_tiers = {},
         upgrades_enabled = get_setting('auto_upgrade_enabled'),
         built_in_regions = {},
         queued_slots = {},
         reserved = 0,
         round = new_round(),
         known_favorites = {},
-        favorite_pass = {},
         upgrade_pass = {}
     }
 
@@ -620,7 +680,7 @@ local function run_turn_start_cycle(faction_name)
     )
 
     if get_setting('favorite_buildings_enabled') then
-        cycle.favorites = get_valid_favorites()
+        cycle.favorite_tiers = get_favorite_tiers()
     end
 
     run_rounds('run_building_round', function()
@@ -641,13 +701,10 @@ local function load_skill_priorities()
     if not file then return end
 
     for line in file:lines() do
-        local key, priority = string.match(strip_bom(line), '^%s*(.-)%s*=%s*(%d+)%s*$')
+        local key, priority = parse_priority_line(line)
 
         if key then
-            -- The file can be edited by hand, and an icon exists only for the valid values
-            local value = math.min(tonumber(priority), skill_max_priority)
-
-            skill_priorities[key] = value > 0 and value or nil
+            skill_priorities[key] = priority > 0 and priority or nil
         end
     end
 
@@ -955,13 +1012,19 @@ local function get_slot_favorite_key(slot_id)
     )
 end
 
+local function favorite_priority_image(priority)
+    return 'ui/skins/default/af_tweaker_favorite_priority_' .. priority .. '.png'
+end
+
 local function update_favorite_button(button, level_key, slot_id)
-    if find_favorite_index(level_key) then
-        button:SetState('selected')
-        button:SetTooltipText('Remove from favorite buildings', '', true)
+    local priority = get_favorite_priority(level_key)
+
+    button:SetImagePath(favorite_priority_image(priority), 0)
+
+    if priority == 0 then
+        button:SetTooltipText('Favorite buildings: no priority, this building is not built automatically. Click to change.', '', true)
     else
-        button:SetState('active')
-        button:SetTooltipText('Add to favorite buildings', '', true)
+        button:SetTooltipText('Favorite buildings: priority ' .. priority .. ' of ' .. max_priority .. '. Click to change.', '', true)
     end
 
     favorite_button_key = level_key
@@ -1013,7 +1076,6 @@ local function refresh_favorite_button()
     local button = core:get_or_create_component(favorite_button_name, favorite_button_template, options_list)
 
     button:SetVisible(true)
-    button:SetImagePath(favorite_button_icon, 0)
     update_favorite_button(button, level_key, slot_id)
     options_list:Layout()
 end
@@ -1043,7 +1105,7 @@ local function update_skill_button(button, level_key)
     if priority == 0 then
         button:SetTooltipText('Auto skills: no priority. Click to change.', '', true)
     else
-        button:SetTooltipText('Auto skills: priority ' .. priority .. ' of ' .. skill_max_priority .. '. Click to change.', '', true)
+        button:SetTooltipText('Auto skills: priority ' .. priority .. ' of ' .. max_priority .. '. Click to change.', '', true)
     end
 end
 
@@ -1126,7 +1188,7 @@ local function on_skill_button_click(context)
         return
     end
 
-    local priority = ((skill_priorities[key] or 0) + 1) % (skill_max_priority + 1)
+    local priority = ((skill_priorities[key] or 0) + 1) % (max_priority + 1)
 
     skill_priorities[key] = priority > 0 and priority or nil
 
@@ -1191,7 +1253,7 @@ local function on_favorite_button_click(context)
         return
     end
 
-    toggle_favorite(level_key)
+    change_favorite_priority(level_key)
     update_favorite_button(button, level_key, slot_id)
 end
 

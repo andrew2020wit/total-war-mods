@@ -12,8 +12,8 @@ Not published on the Steam Workshop yet. First in-game run was on 2026-10-31 —
 ## What the mod does
 
 At the start of the player's turn the mod spends the money above a minimum the player sets
-(`budget = treasury - min_treasury`). Favorite buildings go first, upgrades get what's left.
-Each pass stops when the budget runs out. At the end the cycle is logged: the budget at the
+(`budget = treasury - min_treasury`). Favorite buildings go first, the ones with more stars
+before the others, and upgrades get what's left. Each pass stops when the budget runs out. At the end the cycle is logged: the budget at the
 start, the numbers of favorites built and buildings upgraded, the total spent and the
 budget at the end.
 
@@ -22,9 +22,16 @@ doesn't change during the loop, so re-reading it would overspend.
 
 ### Favorite buildings
 
-The player marks a building with a star button in the popup of its slot. For each free slot
-of each settlement, the mod takes the first favorite that can be built there and that fits
-the budget.
+The player gives a building from one to three stars with a button in the popup of its slot,
+like the priorities of skills. A building without stars is never put in a free slot, while
+the upgrades don't depend on stars at all.
+
+Each priority is a tier, and the tiers go from three stars down. A tier goes through the free
+slots of all settlements before the next one starts, so the stars hold when the money runs
+out: a one-star building of the first region can't spend what a three-star one of the last
+region needs. Inside a tier a free slot takes the first favorite in the order of adding that
+can be built there and that fits the budget. So fewer stars can still win when the better
+building can't go in that slot or doesn't fit the budget: gold isn't saved up for it.
 
 The button:
 - The hovered slot is found by polling every 250 ms on a real-time timer: `settlement_list >
@@ -54,30 +61,35 @@ The button:
 - With `favorite_buildings_enabled` off the button isn't added, and one that's already in a
   popup is hidden when the popup is polled. Clicks are ignored.
 - The button is created with `core:get_or_create_component` from
-  `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
-  No vanilla UI file is replaced.
+  `ui/templates/round_small_button` in `options_list`, next to the demolish button. It's the
+  template of the vanilla buttons of this popup. No vanilla UI file is replaced.
+- Each click cycles none, 1, 2, 3, none, and the icon shows the priority. The button isn't a
+  toggle one: a toggle flips its state by itself on a click, which doesn't fit four values.
 - A click finds its slot by going up from the star through the parents, not from the last
   poll: a popup can already have a star from an earlier hover, and the poll can be behind the
   mouse. So a click always goes to the building of its own popup.
-- The state of the star is set again whenever the hovered slot changes: two slots of the same
+- The icon of the star is set again whenever the hovered slot changes: two slots of the same
   chain can each have a popup with a star, and a click updates only one of them.
 - Tooltips go through `SetTooltipText(text, '', true)`: the Assembly Kit docs have
   `text_source` before the flag for all states. Many mods, MCT among them, pass `(text, true)`.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
 - The icon goes on image index 0 of the template, which shows it at 38x38 in every state. So
-  it must be a 38x38 image with the glyph centered: `af_tweaker_favorite_star.png` in the mod
-  is made from the vanilla `icon_reputation_star_gold.png`, which is 26x26 with uneven margins
-  and sits too high when used directly.
+  it must be a 38x38 image with the glyph centered: `af_tweaker_favorite_priority_0..3.png` in
+  the mod. They're made from the vanilla `icon_reputation_star_gold.png`, which is 26x26 with
+  uneven margins and sits too high when used directly: one gold star, the same star in grey for
+  no priority, and for 2 and 3 the glyphs of `af_tweaker_skill_priority_2..3.png`.
 - The building browser has a separate `options_list`, which doesn't get the button.
 
 The list:
 - A favorite is stored as the first level of the chain, whichever level the player clicked,
   because that's what an empty slot can build. Later levels are the job of the upgrades.
-- It's kept in `!!af_tweaker-favorites.txt` in the game folder, one key per line, in the order
-  of adding, which is also the build priority. The file doesn't depend on a campaign, a save
-  or MCT, and can be edited by hand, a BOM from an editor is ignored. It's read when the script
-  loads, written on each click.
+- It's kept in `!!af_tweaker-favorites.txt` in the game folder, as `key=priority` lines in the
+  order of adding, which is the build order inside a tier. A new priority doesn't move a
+  building in the list. A line with only a key, as versions up to 0.5 wrote it, has one star,
+  and the next click rewrites the file in the new format. `key=0` means no favorite and a number
+  above 3 means 3. The file doesn't depend on a campaign, a save or MCT, and can be edited by
+  hand, a BOM from an editor is ignored. It's read when the script loads, written on each click.
 - Keys the current game doesn't know, from a mod that's off for example, are logged and
   ignored but stay in the file. Keys of other factions are simply never buildable.
 - Which building can go where is decided with the same checks as the construction popup:
@@ -100,15 +112,18 @@ The list:
   pooled cost comes from
   `dlc29_vmp_vampire_lair_popup.twui.xml`:
   `IsContextValid(cost) && cost.PooledResourceTransactionList.IsEmpty == false`.
-- While a favorite waits for a round, upgrades wait too, and the slot stays reserved for it
-  instead of going to the next favorite. A building that waits holds its gold until the next
-  round (`reserved`), so what comes later in the order can't take it.
-- Only the first round of a pass, favorites or upgrades, goes through all regions. The next ones
-  look only where a building waits or where the budget didn't reach, as each slot takes
-  several context queries.
-- A slot gets one command per cycle (`queued_slots`). So a game slower than a round can't get
-  the same command twice, and a refused command can't repeat. It also means the rounds end:
-  a building waits only because another one was queued in that round.
+- While a favorite waits for a round, the lower tiers and upgrades wait too, and the slot stays
+  reserved for it instead of going to the next favorite. A building that waits holds its gold
+  until the next round (`reserved`), so what comes later in the order can't take it. A tier
+  starts in the round where nothing above it waits, so three tiers take more rounds than one.
+- Only the first round of a pass, a tier of favorites or upgrades, goes through all regions.
+  The next ones look only where a building waits or where the budget didn't reach, as each slot
+  takes several context queries.
+- A slot gets one command per cycle (`queued_slots`), and `for_each_slot` skips it after that.
+  So a game slower than a round can't get the same command twice, and a refused command can't
+  repeat. The next tier skips it too: commands are asynchronous, so a slot queued a moment ago
+  still looks free. It also means the rounds end: a building waits only because another one
+  was queued in that round.
 - The costs are read before the command: after it a level expression through an empty slot may
   no longer resolve.
 
@@ -272,8 +287,11 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Settings window, `enable_logging`                                    | Used in the game; global options **not confirmed yet** |
 | Favorite buildings: the expressions for an empty slot                | Work: the log of 2026-10-31 shows 2 favorites built on turn 45 |
 | Star button: finding the popup, clicks, saving to the file           | Works since 0.3.3, by polling; 0.3.0 and 0.3.1 didn't show it, 0.3.2 crashed the game |
-| Centered icon of the star button                                     | **Not tested in the game**     |
+| Star button on `round_small_button`: icons of all priorities, their change on a click | **Not tested in the game** (0.6.0) |
+| Favorite tiers: more stars get the money first in all settlements    | **Not tested in the game** (0.6.0) |
+| Centered icons of the star button                                    | **Not tested in the game**     |
 | Reading `!!af_tweaker-favorites.txt` in a new campaign               | **Not tested in the game**     |
+| Reading an old list without priorities                               | **Not tested in the game** (0.6.0) |
 | Auto skills: `Status` values                                         | Read from the log of 0.4.3     |
 | Auto skills: `AddPoint`, `CommitSkillChoices`, priorities            | Work in 0.4.4: 78 points on 22 characters in one cycle, confirmed by the user in the game |
 | Auto skills in rounds: the commit is done within `round_delay`       | Works in 0.5.2: 82 points on 23 characters in one cycle, no `not charged` lines |
@@ -286,7 +304,7 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Tooltips of both stars on hover, with `text_source`                  | **Not tested in the game** (0.5.2) |
 | Auto skills: `Level` goes up after a commit                          | **Not tested in the game** (0.5.2) |
 | `{{tr:key}}` in the names of the log, `get_localised_string`         | **Not tested in the game** (0.5.3) |
-| Star button: the state after a click on another slot of the chain    | **Not tested in the game** (0.5.1) |
+| Star button: the icon after a click on another slot of the chain     | **Not tested in the game** (0.5.1) |
 | Favorites with a cap: refused commands are gone                      | **Not tested in the game** (0.5.1) |
 | Panels as direct children of the root                                | Works in 0.5.2: both kinds of stars were shown and clicked |
 | Hiding the buttons when an option is turned off                      | **Not tested in the game** (0.5.0) |
@@ -294,10 +312,12 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
-Next in-game check: compare the `total spent` of the cycle with the treasury change and the
-queue on the map; check that both kinds of stars show their tooltips on hover; check that a
-pair of locked skills gets only one point; with a faction that uses pooled resources, check
-that several such buildings are queued in one turn.
+Next in-game check: click the star of a building through all four icons and look at the file;
+with a small budget, check in the log that three stars are built before one star; compare the
+`total spent` of the cycle with the treasury change and the queue on the map; check that both
+kinds of stars show their tooltips on hover; check that a pair of locked skills gets only one
+point; with a faction that uses pooled resources, check that several such buildings are queued
+in one turn.
 
 ## Tests
 
@@ -330,7 +350,7 @@ them after changing the script, and extend them with the change.
 mods/warhammer_3/af-tweaker/
   script/campaign/mod/af_tweaker.lua      <- the mod logic
   script/mct/settings/af_tweaker.lua      <- the settings window, loaded by MCT
-  ui/skins/default/af_tweaker_favorite_star.png  <- icon of the favorite button
+  ui/skins/default/af_tweaker_favorite_priority_0..3.png  <- icons of the favorite button
   ui/skins/default/af_tweaker_skill_priority_0..3.png  <- icons of the skill priority button
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file

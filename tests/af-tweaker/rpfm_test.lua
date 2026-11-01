@@ -9,7 +9,7 @@ rawset(out, "tab_levels", setmetatable({}, { __index = function() return 0 end }
 CampaignUI = setmetatable({}, { __index = function() return function() return false end end })
 real_timer = { register_repeating = function() end, register_singleshot = function() end, unregister = function() end }
 
-FILES = { ['!!af_tweaker-skill-priorities.txt'] = 'locked=3\n', ['!!af_tweaker-favorites.txt'] = 'fav_pooled\nfav_pooled2\n' }
+FILES = { ['!!af_tweaker-skill-priorities.txt'] = 'locked=3\n', ['!!af_tweaker-favorites.txt'] = 'fav_pooled2\nfav_pooled=2\n' }
 local real_open = io.open
 io.open = function(name, mode)
     if not string.find(name, '!!af_tweaker', 1, true) then return real_open(name, mode) end

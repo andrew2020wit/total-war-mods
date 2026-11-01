@@ -205,7 +205,7 @@ local function start(world)
                 return level_info(level_of(expr)).pooled == true
             end
             if expr:find('^IsContextValid') then
-                return world.is_favorite_possible == nil or world.is_favorite_possible(level_of(expr), slot)
+                return world.is_favorite_possible == nil or world.is_favorite_possible(level_of(expr), slot, id)
             end
             if expr:find('IsActiveForBuildingBrowser') then return is_under_cap(level_of(expr), id) end
             if expr:find('IsLockedByAnyTech') then return true end
@@ -612,6 +612,108 @@ do
     check('a settlement under siege is skipped', game.size_queries[1] == nil and #world.queued == 1, table.concat(world.queued, ' '))
 end
 
+-- Priorities of favorites
+do
+    local world = favorites_world({ 'fav_low=1', 'fav_high=3' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {} } },
+        { cqi = 2, name = 'r2', province = 'p2', slots = { {} } }
+    })
+    world.treasury = 100
+    world.is_favorite_possible = function(key, _, cqi) return not (key == 'fav_high' and cqi == 1) end
+    local game = start(world)
+    game.turn()
+    check('more stars get the money first in all regions', table.concat(world.queued, ' ') == 'fav_high', table.concat(world.queued, ' '))
+    check('the log shows the priority', game.log():find(', priority: 3', 1, true) ~= nil, game.log())
+end
+
+do
+    local world = favorites_world({ 'fav_one_a', 'fav_two=2', 'fav_three=3', 'fav_one_b=1' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, {}, {}, {} } }
+    })
+    local game = start(world)
+    game.turn()
+    check('more stars first, equal ones in the order of adding, a line with only a key has one star',
+        table.concat(world.queued, ' ') == 'fav_three fav_two fav_one_a fav_one_b', table.concat(world.queued, ' '))
+    check('priorities: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = favorites_world({ 'fav_zero=0', 'fav_big=9', 'fav_three=3', ' fav_spaces = 2 ' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, {}, {}, {} } }
+    })
+    local game = start(world)
+    game.turn()
+    check('hand-edited values: 0 is no favorite, too much is 3, spaces are ignored',
+        table.concat(world.queued, ' ') == 'fav_big fav_three fav_spaces', table.concat(world.queued, ' '))
+end
+
+do
+    local function tiers_of(slots)
+        local world = favorites_world({ 'fav_a=3', 'fav_b=3', 'fav_c=1' }, {
+            { cqi = 1, name = 'r1', province = 'p1', slots = slots }
+        }, { fav_a = { pooled = true }, fav_b = { pooled = true } })
+        local game = start(world)
+        game.turn()
+        return world
+    end
+
+    local world = tiers_of({ {}, {} })
+    check('a lower tier does not take the slot of a waiting building',
+        table.concat(world.queued, ' ') == 'fav_a fav_b', table.concat(world.queued, ' '))
+
+    world = tiers_of({ {}, {}, {} })
+    check('a lower tier goes on after the waiting building',
+        table.concat(world.queued, ' ') == 'fav_a fav_b fav_c', table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_a=3', 'fav_b=1' }, { { cqi = 1, name = 'r1', province = 'p1', slots = { {} } } })
+    world.refuse_buildings = true
+    local game = start(world)
+    game.turn()
+    check('the next tier skips a slot queued in the same round', table.concat(world.queued, ' ') == 'fav_a', table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_a=3', 'fav_b=1' }, { { cqi = 1, name = 'r1', province = 'p1', slots = { {} } } })
+    world.is_favorite_possible = function(key) return key ~= 'fav_a' end
+    local game = start(world)
+    game.turn()
+    check('a slot that more stars cannot use goes to fewer stars', table.concat(world.queued, ' ') == 'fav_b', table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_a=3', 'fav_b=1' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {} } }
+    }, { fav_a = { cost = 500 } })
+    world.treasury = 100
+    local game = start(world)
+    game.turn()
+    check('fewer stars get the money that more stars cannot use', table.concat(world.queued, ' ') == 'fav_b', table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({}, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { {}, { level = 'l1', upgrade = true } } }
+    })
+    world.settings.auto_upgrade_enabled = true
+    world.upgrades = { l1 = 'up_a' }
+    local game = start(world)
+    game.turn()
+    check('without stars nothing new is built, upgrades go on', table.concat(world.queued, ' ') == 'up_a', table.concat(world.queued, ' '))
+end
+
+do
+    local world = favorites_world({ 'fav_low=1', 'fav_high=2' }, {
+        { cqi = 1, name = 'r1', province = 'p1', slots = { { level = 'l1', upgrade = true }, {}, {} } }
+    })
+    world.settings.auto_upgrade_enabled = true
+    world.upgrades = { l1 = 'up_a' }
+    local game = start(world)
+    game.turn()
+    check('upgrades go after all tiers', table.concat(world.queued, ' ') == 'fav_high fav_low up_a', table.concat(world.queued, ' '))
+end
+
 do
     local function upgrade_of(upgrades, chains)
         local world = favorites_world({}, {
@@ -728,7 +830,6 @@ function ui:SetTooltipText(text, _, all_states)
 end
 function ui:SetDockingPoint() end
 function ui:SetDockOffset() end
-function ui:SetState(state) self.state = state end
 function ui:Layout() end
 function ui:IsMouseOverChildren() return self.hovered == true end
 function ui:GetContextObjectId() return self.context_id or '' end
@@ -791,8 +892,8 @@ do
     check('the priority is saved', read_file(priorities_file):find('skill_key=1', 1, true) ~= nil)
 
     game.listeners.AfTweakerFavoriteButton.handler({ component = favorite, string = favorite.id })
-    check('a click adds the favorite', read_file(favorites_file):find('chain_first_level', 1, true) ~= nil)
-    check('the favorite star is selected', favorite.state == 'selected')
+    check('a click adds the favorite', read_file(favorites_file):find('chain_first_level=1', 1, true) ~= nil)
+    check('the favorite star shows the priority', favorite.images[1]:find('favorite_priority_1', 1, true) ~= nil, favorite.images[1])
 
     settings.favorite_buildings_enabled = false
     settings.auto_skills_enabled = false
@@ -824,7 +925,7 @@ do
     game.listeners.AfTweakerFavoriteButton.handler({ component = second_star, string = second_star.id })
     world.slot.hovered, second.hovered = true, false
     game.polls[1]()
-    check('a star of the same chain follows the last click', first_star.state == 'selected', first_star.state)
+    check('a star of the same chain follows the last click', first_star.images[1]:find('favorite_priority_1', 1, true) ~= nil, first_star.images[1])
 end
 
 do
@@ -842,9 +943,42 @@ do
     game.polls[1]()
     -- The star of the second slot is clicked before a poll sees the mouse there
     game.listeners.AfTweakerFavoriteButton.handler({ component = second_star, string = second_star.id })
-    check('a click goes to the slot of its star', read_file(favorites_file) == 'second_chain\n', read_file(favorites_file))
-    check('the clicked star shows its own building', second_star.state == 'selected', second_star.state)
+    check('a click goes to the slot of its star', read_file(favorites_file) == 'second_chain=1\n', read_file(favorites_file))
+    check('the clicked star shows its own building', second_star.images[1]:find('favorite_priority_1', 1, true) ~= nil, second_star.images[1])
     check('such a click: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    world.favorites = { 'other=2' }
+    local game = start(world)
+    game.polls[1]()
+    local star = world.options_list:Find('af_tweaker_favorite_button')
+    local function click_shows(priority, file_text)
+        game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
+        check('a click: the icon of priority ' .. priority, star.images[1]:find('favorite_priority_' .. priority, 1, true) ~= nil, star.images[1])
+        check('a click: the file with priority ' .. priority, read_file(favorites_file) == file_text, read_file(favorites_file))
+    end
+
+    check('a building without stars has the grey star', star.images[1]:find('favorite_priority_0', 1, true) ~= nil, star.images[1])
+    check('the tooltip of no stars', star.tooltip:find('not built automatically', 1, true) ~= nil, star.tooltip)
+    click_shows(1, 'other=2\nchain_first_level=1\n')
+    click_shows(2, 'other=2\nchain_first_level=2\n')
+    click_shows(3, 'other=2\nchain_first_level=3\n')
+    check('the tooltip of the priority', star.tooltip:find('priority 3 of 3', 1, true) ~= nil, star.tooltip)
+    click_shows(0, 'other=2\n')
+    check('the stars: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    world.favorites = { 'chain_first_level', 'other=2' }
+    local game = start(world)
+    game.polls[1]()
+    local star = world.options_list:Find('af_tweaker_favorite_button')
+    check('a favorite of an old list has one star', star.images[1]:find('favorite_priority_1', 1, true) ~= nil, star.images[1])
+    game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
+    check('a new priority keeps the place in the list', read_file(favorites_file) == 'chain_first_level=2\nother=2\n', read_file(favorites_file))
 end
 
 do

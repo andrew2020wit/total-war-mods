@@ -1,3 +1,4 @@
+2026.11.01 AF Tweaker v0.6.0: favorite buildings get from one to three stars, each click on the star button changes them; buildings with more stars are built first in all settlements, buildings without stars aren't built; favorites from an older list have one star
 2026.11.01 AF Tweaker v0.5.3: the log shows the text of the names that refer to another loc text, not the {{tr:...}} reference
 2026.11.01 AF Armageddon v9.3.3: the cultures without bonuses are set for each campaign, not globally
 2026.11.01 AF Armageddon v9.3.2: the log starts each turn with a section of all the settings

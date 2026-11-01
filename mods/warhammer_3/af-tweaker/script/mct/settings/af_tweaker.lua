@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '0.5.3'
+local mod_version = '0.6.0'
 
 local mct_mod = get_mct():register_mod("af_tweaker")
 
@@ -32,7 +32,7 @@ mct_mod:add_new_section("favorite_buildings", "Favorite buildings")
 
 local favorites = mct_mod:add_new_option("favorite_buildings_enabled", "checkbox")
 favorites:set_text("Build favorite buildings at the start of the turn")
-favorites:set_tooltip_text("Mark a building with the star button in its popup. At the start of your turn favorite buildings are built in free slots. The minimum treasury applies.")
+favorites:set_tooltip_text("The star button in the popup of a building sets a priority from 1 to 3. At the start of your turn such buildings are built in free slots, higher priorities first. Buildings without a priority are not built. The minimum treasury applies.")
 favorites:set_default_value(true)
 favorites:set_is_global(true)
 

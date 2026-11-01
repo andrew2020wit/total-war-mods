@@ -42,8 +42,9 @@ except for the priority stars, which appear right away.
 Buildings are paid for only with the money above the minimum. With 20,000 in the treasury and a
 minimum of 6,000, the mod can spend up to 14,000 in a turn.
 
-Favorite buildings go first, and upgrades get what's left. If a building is too expensive, the
-mod moves on to the next one, because a cheaper one may still fit.
+Favorite buildings go first, the ones with more stars before the others, and upgrades get what's
+left. If a building is too expensive, the mod moves on to the next one, because a cheaper one
+may still fit.
 
 ## Automatic building upgrades
 
@@ -67,16 +68,30 @@ goes for several copies of a favorite building, as the game may limit how many y
 
 ![The star button of a building](../imgs/tweaker/favorite.png)
 
-Favorite buildings are built automatically in free building slots.
+Buildings with stars are built automatically in free building slots. The mod never builds a new
+building without stars, but automatic upgrades still apply to the ones you built yourself.
 
-To mark a building, hover over it in the settlement panel and click the **star** next to the
-demolish button. The star lights up. Click it again to remove the building from the favorites.
+To set the stars, hover over a building in the settlement panel and click the **star** next to
+the demolish button:
+
+| Star | Priority |
+|---|---|
+| Grey | None: the mod doesn't build it |
+| One gold star | 1 |
+| Two gold stars | 2 |
+| Three gold stars | 3 |
+
+A fourth click clears the priority. Free slots in all your settlements get the buildings with
+three stars first, then those with two stars, then those with one.
 
 - You can click the star on any level of a building: the mod builds its first level, and
   automatic upgrades take it further.
 - The star is meant for optional buildings, not for the main building of a settlement.
 - The star is available in the settlement panel, not in the Building Browser.
-- Favorites are built in the order you marked them, at most one of each per settlement per turn.
+- Buildings with the same number of stars go in the order you marked them, and at most one of
+  each is built per settlement per turn.
+- A building with fewer stars is still built if a better one can't go in that slot or doesn't
+  fit the budget. The mod doesn't save money for an expensive building.
 - The game's own rules still apply: the mod builds only what you could build yourself in
   that slot.
 - Favorites are shared by all your campaigns. Buildings of other factions are simply ignored.
@@ -141,7 +156,7 @@ AF Tweaker is meant to work alongside other mods, and it was tested in a campaig
 
 - The mod doesn't work in multiplayer campaigns.
 - The mod's files are in the game folder, next to the game itself:
-  - `!!af_tweaker-favorites.txt` — your favorite buildings;
+  - `!!af_tweaker-favorites.txt` — your favorite buildings and their stars;
   - `!!af_tweaker-skill-priorities.txt` — your skill priorities;
   - `!!af_tweaker.txt` — the log, if it's turned on;
   - `!!af_tweaker-errors.txt` — errors, if there were any.
