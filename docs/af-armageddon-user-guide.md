@@ -25,6 +25,8 @@ You can add the mod to a running campaign. Don't remove it afterwards, see
 
 ## Settings
 
+![The settings window](../imgs/armageddon/armageddon-settings.png)
+
 Open the Mod Configuration Tool window in the game and choose **AF Armageddon**, then **Settings**.
 The version of the mod is shown in its title.
 
