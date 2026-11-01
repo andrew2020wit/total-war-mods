@@ -334,7 +334,7 @@ mods/warhammer_3/af-tweaker/
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file
 docs/af-tweaker-user-guide.md             <- guide for players
-imgs/af-tweaker.png                       <- Steam Workshop preview image, 256x256
+imgs/tweaker/af-tweaker.png               <- Steam Workshop preview image, 256x256
 imgs/tweaker/                             <- screenshots for the user guide
 tests/af-tweaker/                         <- tests of the script, not part of the pack
 ```

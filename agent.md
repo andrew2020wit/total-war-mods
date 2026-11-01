@@ -15,8 +15,8 @@ mods/warhammer_3/
   af_turn_crash_debug_logger.pack
   af-tweaker/                              <- source for "AF Tweaker" (see af-tweaker-agent.md at repo root)
   af-tweaker.pack
-imgs/                                       <- Steam Workshop preview images, one per mod
-imgs/tweaker/                               <- screenshots for the AF Tweaker user guide
+imgs/armageddon/                            <- Steam Workshop preview and user guide screenshots of AF Armageddon
+imgs/tweaker/                               <- Steam Workshop preview and user guide screenshots of AF Tweaker
 docs/                                       <- guides for players
 tests/af-armageddon/                        <- tests of AF Armageddon (see af_armageddon-agent.md)
 tests/af-tweaker/                           <- tests of AF Tweaker (see af-tweaker-agent.md)
