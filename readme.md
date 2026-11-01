@@ -37,6 +37,8 @@ The only thing which you can expect that this mod gradually increases difficulty
 
 ### see also
 
+[User guide](./docs/af-armageddon-user-guide.md)
+
 [af_armageddon-agent.md](./af_armageddon-agent.md)
 
 ## AF Tweaker

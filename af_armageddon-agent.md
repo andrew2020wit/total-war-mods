@@ -4,6 +4,10 @@ Source code for the **"AF Armageddon"** mod for *Total War: Warhammer 3*.
 
 Steam Workshop page: https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094
 
+This file is for developers. What a player needs to know is in the
+[user guide](docs/af-armageddon-user-guide.md): update it when the behaviour or the settings
+change.
+
 ## What the mod does
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
@@ -46,6 +50,9 @@ mods/warhammer_3/!!af_armageddon/
 mods/warhammer_3/!!af_armageddon.pack     <- packed, distributable mod (built with RPFM)
 tests/af-armageddon/model_test.lua        <- tests of the script, see "Tests" below
 af_armageddon-agent.md                    <- this file (lives at repo root, see agent.md's rule on mods/)
+docs/af-armageddon-user-guide.md          <- guide for players
+imgs/armageddon/!!af_armageddon.png       <- Steam Workshop preview image, 256x256
+imgs/armageddon/                          <- screenshots for the user guide
 ```
 
 Important: **effect bundle definitions themselves (the `af_armageddon_effect_bundle_ai_buff_*`
@@ -68,7 +75,7 @@ turn 40+ — see `effect_bundles_turns` in the script for the turn thresholds):
 | `wh_main_effect_unit_recruitment_points`    | faction_to_province_own_unseen | 2 | 4 | 6 | 8 | 10 |
 | `wh_main_effect_province_growth_events`     | faction_to_province_own_unseen | 20 | 40 | 60 | 80 | 100 |
 
-(Read out via the RPFM MCP server on 2026-09-26; re-verify from the `.pack` if it's been
+(Read out via the RPFM MCP server on 2026-11-01; re-verify from the `.pack` if it's been
 edited since.)
 
 ## Settings
@@ -140,6 +147,10 @@ tests check that.
   culture is in no group, not even with another missing one, so such a faction gets the bonuses.
 - Check `is_logging_enabled()` before a log line whose text takes calls to the game: `log`
   checks it too, but only after the arguments were already evaluated.
+- `add_agent_experience` takes effect later, so `level a => a` in the log doesn't mean the
+  character got no experience: on 2026-11-01 all 1371 lines of a turn looked like that. The rank
+  of a unit changes at once. Generic lords stay at level 0 in that log, about a third of all
+  lines, while the other characters are at level 6 and above.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`).
 
