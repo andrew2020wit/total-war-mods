@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.5.1'
+local mod_version = '0.5.2'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -42,7 +42,6 @@ local skill_max_priority = 3
 local favorites = {}
 local favorite_button_key = nil
 local favorite_button_slot_id = nil
-local hovered_slot_id = nil
 local skill_priorities = {}
 
 local function get_setting(option_key)
@@ -217,15 +216,15 @@ end
 -- building has one. So the first copy of a favorite goes alone, which is enough for a cap of
 -- one per faction, and then a round takes one copy per province, enough for one per province.
 local function waits_for_cap(cycle, level_key, province_name)
-    local provinces = cycle.round_favorites[level_key]
+    local provinces = cycle.round.favorites[level_key]
 
     return provinces ~= nil and (provinces[province_name] or not cycle.known_favorites[level_key])
 end
 
 -- What waits keeps its gold until the next round, or something later in the order would take it
 local function defer_level(region, cost, cycle)
-    cycle.has_deferred = true
-    cycle.recheck_regions[region:name()] = true
+    cycle.round.has_deferred = true
+    cycle.round.recheck_regions[region:name()] = true
     cycle.budget = cycle.budget - cost
     cycle.reserved = cycle.reserved + cost
 end
@@ -252,7 +251,7 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
     if cost > cycle.budget then
         -- The gold of a waiting building can come back in the next round
         if cycle.reserved > 0 then
-            cycle.recheck_regions[region:name()] = true
+            cycle.round.recheck_regions[region:name()] = true
         end
 
         return nil
@@ -266,8 +265,8 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
         return nil
     end
 
-    if (has_development_cost and cycle.development_provinces[province_name])
-        or (has_resource_cost and cycle.pooled_resources_used)
+    if (has_development_cost and cycle.round.development_provinces[province_name])
+        or (has_resource_cost and cycle.round.pooled_resources_used)
         or (is_favorite and waits_for_cap(cycle, level_key, province_name)) then
         defer_level(region, cost, cycle)
         return nil, true
@@ -282,18 +281,18 @@ local function queue_level(region, region_cqi, slot_index, level, level_key, cyc
     cycle.spent = cycle.spent + cost
 
     if has_resource_cost then
-        cycle.pooled_resources_used = true
+        cycle.round.pooled_resources_used = true
     end
 
     if has_development_cost then
-        cycle.development_provinces[province_name] = true
+        cycle.round.development_provinces[province_name] = true
     end
 
     if is_favorite then
-        local provinces = cycle.round_favorites[level_key] or {}
+        local provinces = cycle.round.favorites[level_key] or {}
 
         provinces[province_name] = true
-        cycle.round_favorites[level_key] = provinces
+        cycle.round.favorites[level_key] = provinces
     end
 
     return cost
@@ -340,13 +339,18 @@ local function upgrade_slot(region, region_cqi, slot_index, cycle)
     end
 end
 
+-- Both lists can be edited by hand, and some editors start a file with a BOM
+local function strip_bom(line)
+    return (string.gsub(line, '^\239\187\191', ''))
+end
+
 local function load_favorites()
     local file = io.open(favorites_file_name, "r")
 
     if not file then return end
 
     for line in file:lines() do
-        local key = string.match(line, '^%s*(.-)%s*$')
+        local key = string.match(strip_bom(line), '^%s*(.-)%s*$')
 
         if key ~= '' then
             table.insert(favorites, key)
@@ -507,7 +511,7 @@ local function for_each_region(faction, cycle, pass, region_handler)
                 region_handler(region)
             end
 
-            if cycle.budget <= 0 or cycle.recheck_regions[region_name] then
+            if cycle.budget <= 0 or cycle.round.recheck_regions[region_name] then
                 pass.regions[region_name] = true
             end
         end
@@ -533,6 +537,17 @@ local function upgrade_buildings(faction, cycle)
     end)
 end
 
+-- What holds only for one round: the next one reads what the game has left instead
+local function new_round()
+    return {
+        has_deferred = false,
+        recheck_regions = {},
+        favorites = {},
+        development_provinces = {},
+        pooled_resources_used = false
+    }
+end
+
 -- Returns true if a building waits for the development points or the resources of this round.
 -- Upgrades wait for the favorites, which have to get the money first.
 local function run_building_round(faction_name, cycle)
@@ -545,25 +560,21 @@ local function run_building_round(faction_name, cycle)
         return false
     end
 
-    for level_key in pairs(cycle.round_favorites) do
+    for level_key in pairs(cycle.round.favorites) do
         cycle.known_favorites[level_key] = true
     end
 
-    cycle.has_deferred = false
-    cycle.recheck_regions = {}
-    cycle.round_favorites = {}
-    cycle.development_provinces = {}
-    cycle.pooled_resources_used = false
+    cycle.round = new_round()
 
     if #cycle.favorites > 0 then
         build_favorites(faction, cycle)
     end
 
-    if cycle.upgrades_enabled and not cycle.has_deferred then
+    if cycle.upgrades_enabled and not cycle.round.has_deferred then
         upgrade_buildings(faction, cycle)
     end
 
-    return cycle.has_deferred
+    return cycle.round.has_deferred
 end
 
 -- The treasury is read once: the script counts the gold it spends, so the budget holds
@@ -582,7 +593,7 @@ local function run_turn_start_cycle(faction_name)
         built_in_regions = {},
         queued_slots = {},
         reserved = 0,
-        round_favorites = {},
+        round = new_round(),
         known_favorites = {},
         favorite_pass = {},
         upgrade_pass = {}
@@ -614,7 +625,7 @@ local function load_skill_priorities()
     if not file then return end
 
     for line in file:lines() do
-        local key, priority = string.match(line, '^%s*(.-)%s*=%s*(%d+)%s*$')
+        local key, priority = string.match(strip_bom(line), '^%s*(.-)%s*=%s*(%d+)%s*$')
 
         if key then
             -- The file can be edited by hand, and an icon exists only for the valid values
@@ -683,6 +694,10 @@ local function get_skill_keys(character_cqi)
     return skill_keys
 end
 
+local function get_skill_level(character_cqi, skill_index)
+    return get_character_value(character_cqi, skill_expression(skill_index) .. '.Level') or 0
+end
+
 -- Skills without a priority go last. Equal priorities go in the order of the skill tree.
 local function find_next_skill(character_cqi, entry)
     local best_index = nil
@@ -740,6 +755,9 @@ local function spend_skill_point(character_cqi, entry, points)
         return nil
     end
 
+    entry.last_index = skill_index
+    entry.last_level = get_skill_level(character_cqi, skill_index)
+
     common.call_context_command(character_context, character_cqi, skill_expression(skill_index) .. '.AddPoint')
     common.call_context_command(character_context, character_cqi, 'CommitSkillChoices')
 
@@ -756,14 +774,15 @@ end
 -- Returns true if the character can take the next point. A point that wasn't charged gets a
 -- few rounds, as the game can be slow. After that the skill is refused until the next turn:
 -- other skills may still take the points, and each refusal leaves fewer skills to try.
+-- A level up during the rounds hides a charged point, so the level of the skill counts too.
 local function check_last_skill_point(character_cqi, entry, points, stats)
     if not entry.last_key then
         return true
     end
 
-    if points < entry.points then
+    if points < entry.points or get_skill_level(character_cqi, entry.last_index) > entry.last_level then
         stats.characters = stats.characters + (entry.has_spent and 0 or 1)
-        stats.spent = stats.spent + entry.points - points
+        stats.spent = stats.spent + math.max(entry.points - points, 1)
         entry.has_spent = true
     elseif entry.rounds_waited < settings.skill_commit_rounds then
         entry.rounds_waited = entry.rounds_waited + 1
@@ -920,31 +939,29 @@ local function get_slot_favorite_key(slot_id)
     )
 end
 
-local function update_favorite_button(button, level_key)
+local function update_favorite_button(button, level_key, slot_id)
     if find_favorite_index(level_key) then
         button:SetState('selected')
-        button:SetTooltipText('Remove from favorite buildings', true)
+        button:SetTooltipText('Remove from favorite buildings', '', true)
     else
         button:SetState('active')
-        button:SetTooltipText('Add to favorite buildings', true)
+        button:SetTooltipText('Add to favorite buildings', '', true)
     end
+
+    favorite_button_key = level_key
+    favorite_button_slot_id = slot_id
 end
 
--- Also says if the popup is inside the slot: such a popup can't belong to another slot
+-- The popup is a child of its slot, so it can't belong to another slot
 local function find_options_list(slot_uic)
-    local slot_popup = find_component(slot_uic, popup_name)
-    local popup = slot_popup or find_component(core:get_ui_root(), popup_name)
+    local popup = find_component(slot_uic, popup_name)
 
-    return popup and find_component(popup, 'options_list'), slot_popup ~= nil
+    return popup and find_component(popup, 'options_list')
 end
 
 local function refresh_favorite_button()
     local slot_uic = find_hovered_slot()
     local slot_id = slot_uic and slot_uic:GetContextObjectId(slot_context)
-    local is_slot_settled = slot_id == hovered_slot_id
-
-    hovered_slot_id = slot_id
-
     local level_key = slot_id and get_slot_favorite_key(slot_id)
 
     if not level_key then
@@ -952,21 +969,9 @@ local function refresh_favorite_button()
     end
 
     -- The game opens the popup some time after the mouse enters the slot
-    local options_list, is_slot_popup = find_options_list(slot_uic)
+    local options_list = find_options_list(slot_uic)
 
     if not options_list then
-        return
-    end
-
-    -- On the way to the star the mouse can cross another slot while this popup is still open
-    local popup_slot_id = options_list:GetContextObjectId(slot_context)
-
-    if popup_slot_id and popup_slot_id ~= '' then
-        if popup_slot_id ~= slot_id then
-            return
-        end
-    elseif not is_slot_popup and not is_slot_settled then
-        -- Nothing tells whose popup it is: a slot the mouse only crosses doesn't get the star
         return
     end
 
@@ -993,11 +998,8 @@ local function refresh_favorite_button()
 
     button:SetVisible(true)
     button:SetImagePath(favorite_button_icon, 0)
-    update_favorite_button(button, level_key)
+    update_favorite_button(button, level_key, slot_id)
     options_list:Layout()
-
-    favorite_button_key = level_key
-    favorite_button_slot_id = slot_id
 end
 
 -- The game names the parent of a card after the skill:
@@ -1023,9 +1025,9 @@ local function update_skill_button(button, level_key)
     button:SetImagePath(image, 0)
 
     if priority == 0 then
-        button:SetTooltipText('Auto skills: no priority. Click to change.', true)
+        button:SetTooltipText('Auto skills: no priority. Click to change.', '', true)
     else
-        button:SetTooltipText('Auto skills: priority ' .. priority .. ' of ' .. skill_max_priority .. '. Click to change.', true)
+        button:SetTooltipText('Auto skills: priority ' .. priority .. ' of ' .. skill_max_priority .. '. Click to change.', '', true)
     end
 end
 
@@ -1141,18 +1143,40 @@ local function poll_ui()
     end
 end
 
+-- The poll can be behind the mouse, so a click finds the slot by going up from its star
+local function find_button_slot_id(button)
+    local address = button:Parent()
+
+    while address do
+        local uic = UIComponent(address)
+        local slot_id = uic:GetContextObjectId(slot_context)
+
+        if slot_id and slot_id ~= '' then
+            return slot_id
+        end
+
+        address = uic:Parent()
+    end
+
+    return nil
+end
+
 local function on_favorite_button_click(context)
     if not get_setting('favorite_buildings_enabled') then
         return
     end
 
-    if not favorite_button_key then
+    local button = UIComponent(context.component)
+    local slot_id = find_button_slot_id(button)
+    local level_key = slot_id and get_slot_favorite_key(slot_id)
+
+    if not level_key then
         log_errors('Favorite button: building not found')
         return
     end
 
-    toggle_favorite(favorite_button_key)
-    update_favorite_button(UIComponent(context.component), favorite_button_key)
+    toggle_favorite(level_key)
+    update_favorite_button(button, level_key, slot_id)
 end
 
 -- An error inside a UI listener is otherwise lost

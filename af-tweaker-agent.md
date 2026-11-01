@@ -43,10 +43,12 @@ The button:
   the `[ui]` lines of the script log). `find_child_uicomponent` looks only at the children of
   the root, while `Find` would walk the whole UI each time to learn that a panel is closed.
 - The popup comes from the `mouseover` property of `settlement_building_slot`
-  (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's looked up by
-  name with the recursive `Find`, inside the slot first and then in the whole UI. Don't use a
-  full path: the one in the prologue scripts has a `popup_holder` that no longer exists, and
-  following it silently finds nothing.
+  (`ContextComponentInitialiserMouseover`), so it isn't in that layout file. It's a child of its
+  slot, as the `[ui]` lines of the script log show: `<slot> > building_construction_popup >
+  popup_panel > building_tree_holder > options_parent > options_buttons > options_list`. So it's
+  looked up by name with the recursive `Find` inside the hovered slot, and can't belong to
+  another slot. Don't use a full path: the one in the prologue scripts has a `popup_holder` that
+  no longer exists, and following it silently finds nothing.
 - The popup opens some time after the mouse enters, so polls before that find nothing and
   simply wait for the next one.
 - With `favorite_buildings_enabled` off the button isn't added, and one that's already in a
@@ -54,12 +56,13 @@ The button:
 - The button is created with `core:get_or_create_component` from
   `ui/templates/round_small_button_toggle` in `options_list`, next to the demolish button.
   No vanilla UI file is replaced.
-- A click applies to the last building the button was shown for. While the mouse crosses
-  another slot the old popup can still be open, so the key changes only when the popup belongs
-  to the hovered slot: by the context of `options_list`, by the popup being inside the slot, or,
-  when neither says, by the mouse staying on the slot for two polls in a row.
+- A click finds its slot by going up from the star through the parents, not from the last
+  poll: a popup can already have a star from an earlier hover, and the poll can be behind the
+  mouse. So a click always goes to the building of its own popup.
 - The state of the star is set again whenever the hovered slot changes: two slots of the same
   chain can each have a popup with a star, and a click updates only one of them.
+- Tooltips go through `SetTooltipText(text, '', true)`: the Assembly Kit docs have
+  `text_source` before the flag for all states. Many mods, MCT among them, pass `(text, true)`.
 - It's added only for the player's own buildings. The game hides `options_parent` when
   `CanShowOptionsPopup` is false, and the button goes with it.
 - The icon goes on image index 0 of the template, which shows it at 38x38 in every state. So
@@ -73,7 +76,8 @@ The list:
   because that's what an empty slot can build. Later levels are the job of the upgrades.
 - It's kept in `!!af_tweaker-favorites.txt` in the game folder, one key per line, in the order
   of adding, which is also the build priority. The file doesn't depend on a campaign, a save
-  or MCT, and can be edited by hand. It's read when the script loads, written on each click.
+  or MCT, and can be edited by hand, a BOM from an editor is ignored. It's read when the script
+  loads, written on each click.
 - Keys the current game doesn't know, from a mod that's off for example, are logged and
   ignored but stay in the file. Keys of other factions are simply never buildable.
 - Which building can go where is decided with the same checks as the construction popup:
@@ -134,11 +138,12 @@ point stays unspent while something can be bought.
   locks, and the rank of a later level would go unchecked. The next round reads `Status`,
   `Level` and `NextLevelContext` after the commit, so all of this comes from the game itself.
 - A character whose `SkillPointsAvailable` didn't go down waits up to `skill_commit_rounds`
-  more rounds, so a slow commit can't lead to a choice from stale data. After that the skill
-  counts as refused until the next turn, with `skill point not charged` in the log, and the
-  character goes on with the next skill. A skill the game refuses can't block the other ones,
-  and refused commands can't loop, as each one leaves one skill fewer to try. The counters in
-  the log come from the points that really went down.
+  more rounds, so a slow commit can't lead to a choice from stale data. A level up during the
+  rounds can hide a charged point, so the `Level` of the skill going up counts as charged too.
+  After that the skill counts as refused until the next turn, with `skill point not charged` in
+  the log, and the character goes on with the next skill. A skill the game refuses can't block
+  the other ones, and refused commands can't loop, as each one leaves one skill fewer to try.
+  The counters in the log come from the points that were really charged.
 - The rounds stop when the turn ends (`is_factions_turn`). The rest of the points wait for the
   next turn.
 - Locked skills are just skipped, points aren't saved for them, and their parents aren't
@@ -163,7 +168,8 @@ The priority button:
 
 Priorities belong to a skill key, so they apply to every character with that skill, in every
 campaign. They're in `!!af_tweaker-skill-priorities.txt` in the game folder, as `key=priority`
-lines. The file is read when the script loads and written on each click.
+lines. The file is read when the script loads and written on each click, and it can be edited
+by hand too.
 
 CCO functions are documented at
 https://github.com/chadvandy/tw_modding_resources/blob/master/WH3/cco/documentation.html.
@@ -215,7 +221,8 @@ All options are global (`set_is_global(true)`): one value for all campaigns. Wit
 call MCT stores a value changed inside a campaign for that campaign only, so new options
 must set it too.
 
-Keep the defaults in the MCT file and in the `settings` table of the script in sync.
+Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
+tests check that.
 
 ## Compatibility with other mods
 
@@ -272,7 +279,10 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto skills in rounds: the commit is done within `round_delay`, locked skills lose `active` | **Not tested in the game** (0.4.5) |
 | Auto skills: moving on to the next skill after a refused point       | **Not tested in the game** (0.5.0) |
 | Building rounds for development points and pooled resources          | **Not tested in the game** (0.5.0) |
-| Star button: the context of `options_list` is the slot               | **Not tested in the game** (0.4.5); without a context, the popup inside the slot or two polls on it decide (0.5.1) |
+| Star button: the popup is a child of its slot                        | Read from the `[ui]` lines of the script log |
+| Star button: a click finds the slot through the parents              | **Not tested in the game** (0.5.2) |
+| Tooltips of both stars on hover, with `text_source`                  | **Not tested in the game** (0.5.2) |
+| Auto skills: `Level` goes up after a commit                          | **Not tested in the game** (0.5.2) |
 | Star button: the state after a click on another slot of the chain    | **Not tested in the game** (0.5.1) |
 | Favorites with a cap: refused commands are gone                      | **Not tested in the game** (0.5.1) |
 | Panels as direct children of the root                                | Read from the `[ui]` lines of the script log; polling through them is **not tested in the game** (0.5.0) |
@@ -282,7 +292,8 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
 
 Next in-game check: compare the `total spent` of the cycle with the treasury change and the
-queue on the map; check that both kinds of stars still appear (0.5.0 finds them another way);
+queue on the map; check that both kinds of stars still appear (0.5.0 finds them another way),
+show their tooltips on hover, and that a click on a building star changes that building (0.5.2);
 check that no `skill point not charged` lines appear for characters with several points, and
 that a pair of locked skills gets only one point; with a faction that uses pooled resources,
 check that several such buildings are queued in one turn.
@@ -295,8 +306,10 @@ answers still needs a run in the game: see [Verification status](#verification-s
 them after changing the script, and extend them with the change.
 
 - `model_test.lua` runs the script against a small model of the game, UI included: rounds,
-  refused points, the buttons, multiplayer. It needs any Lua 5.4. The one inside the VS Code
-  Lua extension will do. Run it from the repository root, it prints `ALL PASSED` at the end:
+  refused points, the choice of an upgrade, the buttons, multiplayer, work without MCT. It also
+  checks the MCT file against the defaults and the version of the script. It needs any Lua 5.4.
+  The one inside the VS Code Lua extension will do. Run it from the repository root, it prints
+  `ALL PASSED` at the end:
 
   ```bash
   "$(ls ~/.vscode/extensions/sumneko.lua-*/server/bin/lua-language-server.exe | tail -1)" "$(pwd -W)/tests/af-tweaker/model_test.lua"

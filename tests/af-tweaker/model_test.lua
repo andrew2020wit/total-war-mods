@@ -31,9 +31,12 @@ local function count(text, pattern)
     return n
 end
 
--- world: { skills, points, commit_delay, buildings..., settings, is_mp }
--- Buildings go in world.slots of one region, or in world.regions: { { cqi, name, province, slots } }.
+-- world: { skills, points, commit_delay, buildings..., settings, no_mct, is_mp }
+-- Buildings go in world.slots of one region, or in world.regions: { { cqi, name, province, slots, siege } }.
 -- world.caps limit a key: { limit, per_province }. The game sees new buildings a round later.
+-- world.upgrades is a key or a list of keys per level, world.chains the chains of the keys.
+-- The character is the world itself, or several are in world.heroes: { { cqi, points, skills, wounded } }.
+-- level_up_points of a character come with its next charged point.
 local function start(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -62,16 +65,19 @@ local function start(world)
 
     local overrides = world.settings or {}
     overrides.enable_logging = true
-    env.get_mct = function()
-        return {
-            get_mod_by_key = function()
-                return {
-                    get_option_by_key = function(_, key)
-                        return { get_finalized_setting = function() return overrides[key] end }
-                    end
-                }
-            end
-        }
+
+    if not world.no_mct then
+        env.get_mct = function()
+            return {
+                get_mod_by_key = function()
+                    return {
+                        get_option_by_key = function(_, key)
+                            return { get_finalized_setting = function() return overrides[key] end }
+                        end
+                    }
+                end
+            }
+        end
     end
 
     local region_data = world.regions or (world.slots and { { cqi = 7, name = 'r1', province = 'p1', slots = world.slots } }) or {}
@@ -84,21 +90,28 @@ local function start(world)
             name = function() return data.name end,
             province_name = function() return data.province end,
             has_development_points_to_upgrade = function() return (world.development_points or 0) > 0 end,
-            garrison_residence = function() return { is_under_siege = function() return false end } end
+            garrison_residence = function() return { is_under_siege = function() return data.siege == true end } end
         }
     end
     local function list(items)
         return { num_items = function() return #items end, item_at = function(_, i) return items[i + 1] end }
     end
-    local character = {
-        is_wounded = function() return false end,
-        command_queue_index = function() return 1 end
-    }
+    local heroes = world.heroes or (world.skills and { world }) or {}
+    local hero_of_cqi = {}
+    local characters = {}
+    for i, hero in ipairs(heroes) do
+        local cqi = hero.cqi or i
+        hero_of_cqi[cqi] = hero
+        characters[i] = {
+            is_wounded = function() return hero.wounded == true end,
+            command_queue_index = function() return cqi end
+        }
+    end
     local faction = {
         name = function() return 'player' end,
         treasury = function() return world.treasury or 100000 end,
         region_list = function() return list(regions) end,
-        character_list = function() return list(world.skills and { character } or {}) end,
+        character_list = function() return list(characters) end,
         is_factions_turn = function() return world.turn_over ~= true end
     }
 
@@ -110,8 +123,12 @@ local function start(world)
         get_local_faction_name = function() return 'player' end,
         is_multiplayer = function() return world.is_mp == true end,
         turn_number = function() return 1 end,
-        get_building_level_upgrades = function(_, key) return world.upgrades and { world.upgrades[key] } end,
-        building_chain_key_for_building = function() return 'chain' end
+        get_building_level_upgrades = function(_, key)
+            local upgrades = world.upgrades and world.upgrades[key]
+            if type(upgrades) == 'table' then return upgrades end
+            return world.upgrades and { upgrades }
+        end,
+        building_chain_key_for_building = function(_, key) return world.chains and world.chains[key] or 'chain' end
     }
     env.core = {
         add_listener = function(_, name, event, cond, handler) listeners[name] = { cond = cond, handler = handler } end,
@@ -150,13 +167,15 @@ local function start(world)
             end
 
             if context == 'CcoCampaignCharacter' then
+                local hero = hero_of_cqi[id]
                 local index = tonumber(expr:match('^SkillList%.At%((%d+)%)'))
-                if expr == 'SkillPointsAvailable' then return world.points end
-                if expr == 'SkillList.Size' then return #world.skills end
+                if expr == 'SkillPointsAvailable' then return hero.points end
+                if expr == 'SkillList.Size' then return #hero.skills end
                 if expr == 'Name' then return 'Hero' end
-                local skill = index and world.skills[index + 1]
+                local skill = index and hero.skills[index + 1]
                 if expr:find('%.Status == "active"') then return skill.level < skill.total end
                 if expr:find('%.Key$') then return skill.key end
+                if expr:find('%.Level$') then return skill.level end
                 if expr:find('%.Name$') then return skill.key .. ' name' end
                 if expr:find('%.Status$') then return 'active' end
                 error('skill expression: ' .. expr)
@@ -191,13 +210,13 @@ local function start(world)
         call_context_command = function(context, id, expr)
             table.insert(commands, expr)
             if context == 'CcoCampaignCharacter' then
+                local hero = hero_of_cqi[id]
                 if expr == 'CommitSkillChoices' then
-                    local pending = world.added
-                    world.added = nil
-                    table.insert(pending_commits, { rounds = world.commit_delay or 0, skill = pending })
+                    local pending = hero.added
+                    hero.added = nil
+                    table.insert(pending_commits, { rounds = world.commit_delay or 0, skill = pending, hero = hero })
                 else
-                    local skill = world.skills[tonumber(expr:match('At%((%d+)%)')) + 1]
-                    world.added = skill
+                    hero.added = hero.skills[tonumber(expr:match('At%((%d+)%)')) + 1]
                 end
             else
                 local slot = region_of_cqi[id].slots[slot_of(expr) + 1]
@@ -224,7 +243,8 @@ local function start(world)
                 table.remove(pending_commits, i)
                 if commit.skill and not commit.skill.refuse then
                     commit.skill.level = commit.skill.level + 1
-                    world.points = world.points - 1
+                    commit.hero.points = commit.hero.points - 1 + (commit.hero.level_up_points or 0)
+                    commit.hero.level_up_points = nil
                 end
             else
                 commit.rounds = commit.rounds - 1
@@ -279,7 +299,47 @@ do
     check('the refused skill is tried once', count(game.log(), 'not charged') == 1)
     check('the stats count real points', game.log():find('characters: 1, points spent: 3', 1, true) ~= nil)
     check('no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = {
+        points = 2,
+        skills = { { key = 'a', level = 0, total = 5, refuse = true } }
+    }
+    local game = start(world)
     game.turn()
+    check('a refused skill stays unpaid', world.points == 2 and count(game.log(), 'not charged') == 1)
+    world.skills[1].refuse = false
+    game.turn()
+    check('a skill refused last turn is tried again', world.points == 0, 'points left ' .. world.points)
+end
+
+do
+    local world = {
+        points = 2,
+        level_up_points = 1,
+        skills = { { key = 'a', level = 0, total = 5 } }
+    }
+    local game = start(world)
+    game.turn()
+    check('a level up during the rounds is not a refusal', count(game.log(), 'not charged') == 0, game.log())
+    check('a level up: all points are spent', world.points == 0, 'points left ' .. world.points)
+    check('a level up: the stats count the hidden point', game.log():find('points spent: 3', 1, true) ~= nil, game.log())
+end
+
+do
+    local world = {
+        heroes = {
+            { cqi = 1, points = 2, skills = { { key = 'a', level = 0, total = 5 } } },
+            { cqi = 2, points = 1, skills = { { key = 'b', level = 0, total = 5 } } },
+            { cqi = 3, points = 3, wounded = true, skills = { { key = 'c', level = 0, total = 5 } } }
+        }
+    }
+    local game = start(world)
+    game.turn()
+    check('each character spends their own points', world.heroes[1].points == 0 and world.heroes[2].points == 0)
+    check('a wounded character is skipped', world.heroes[3].points == 3)
+    check('the stats count the characters', game.log():find('characters: 2, points spent: 3', 1, true) ~= nil, game.log())
 end
 
 do
@@ -392,6 +452,28 @@ do
     check('the budget holds across rounds', #world.queued == 2, table.concat(world.queued, ' '))
 end
 
+do
+    local world = building_world()
+    world.treasury = 1000
+    world.settings.min_treasury = 5000
+    local game = start(world)
+    game.turn()
+    check('a treasury under the minimum spends nothing', #world.queued == 0, table.concat(world.queued, ' '))
+    check('the negative budget is logged', game.log():find('budget: -4000', 1, true) ~= nil, game.log())
+    check('a negative budget: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = building_world()
+    world.is_mp = true
+    world.points = 5
+    world.skills = { { key = 'a', level = 0, total = 5 } }
+    world.settings.auto_skills_enabled = true
+    local game = start(world)
+    game.turn()
+    check('multiplayer: a turn does nothing', #game.commands == 0, #game.commands)
+end
+
 local function favorites_world(favorites, regions, levels)
     return {
         queued = {},
@@ -495,6 +577,71 @@ do
     check('copies take few rounds', game.steps <= 3, game.steps)
 end
 
+do
+    local world = favorites_world({ 'fav_a' }, {
+        { cqi = 1, name = 'r1', province = 'p1', siege = true, slots = { {} } },
+        { cqi = 2, name = 'r2', province = 'p2', slots = { {} } }
+    })
+    local game = start(world)
+    game.turn()
+    check('a settlement under siege is skipped', game.size_queries[1] == nil and #world.queued == 1, table.concat(world.queued, ' '))
+end
+
+do
+    local function upgrade_of(upgrades, chains)
+        local world = favorites_world({}, {
+            { cqi = 1, name = 'r1', province = 'p1', slots = { { level = 'l1', upgrade = true } } }
+        })
+        world.settings.auto_upgrade_enabled = true
+        world.upgrades = { l1 = upgrades }
+        world.chains = chains
+        local game = start(world)
+        game.turn()
+        return world, game
+    end
+
+    local world, game = upgrade_of({ 'up_a', 'up_b' })
+    check('a choice inside the chain is left to the player', #world.queued == 0, table.concat(world.queued, ' '))
+    check('the choice is logged', game.log():find('skip branching building', 1, true) ~= nil, game.log())
+
+    world = upgrade_of({ 'up_other', 'up_same' }, { up_other = 'other_chain' })
+    check('an upgrade into another chain is ignored', table.concat(world.queued, ' ') == 'up_same', table.concat(world.queued, ' '))
+
+    world = upgrade_of({ 'up_other' }, { up_other = 'other_chain' })
+    check('only another chain: no upgrade', #world.queued == 0, table.concat(world.queued, ' '))
+end
+
+do
+    local regions = { { cqi = 1, name = 'r1', province = 'p1', slots = { {} } } }
+    local world = favorites_world({ '\239\187\191fav_a' }, regions)
+    world.priorities = '\239\187\191skill_a=3\n'
+    world.settings.auto_skills_enabled = true
+    world.points = 1
+    world.skills = { { key = 'skill_b', level = 0, total = 5 }, { key = 'skill_a', level = 0, total = 5 } }
+    local game = start(world)
+    game.turn()
+    check('a BOM: the first favorite is read', queued_count(world, 'fav_a') == 1, table.concat(world.queued, ' '))
+    check('a BOM: the first priority is read', world.skills[2].level == 1, game.log())
+end
+
+do
+    local function defaults_world(treasury)
+        local world = favorites_world({ 'fav_a' }, { { cqi = 1, name = 'r1', province = 'p1', slots = { {} } } })
+        world.no_mct = true
+        world.treasury = treasury
+        local game = start(world)
+        game.turn()
+        return world, game
+    end
+
+    local world, game = defaults_world(5100)
+    check('without MCT: the favorites are built', #world.queued == 1, table.concat(world.queued, ' '))
+    check('without MCT: no log file', game.log() == '', game.log())
+
+    world = defaults_world(5050)
+    check('without MCT: the minimum treasury is the default', #world.queued == 0, table.concat(world.queued, ' '))
+end
+
 -- Polling
 do
     local world = { settings = {} }
@@ -550,7 +697,10 @@ function ui:SetVisible(value) self.visible = value end
 function ui:NumImages() return #self.images end
 function ui:GetImagePath(i) return self.images[i + 1] end
 function ui:SetImagePath(path, i) self.images[i + 1] = path end
-function ui:SetTooltipText(text) self.tooltip = text end
+function ui:SetTooltipText(text, _, all_states)
+    self.tooltip = text
+    self.tooltip_all_states = all_states
+end
 function ui:SetDockingPoint() end
 function ui:SetDockOffset() end
 function ui:SetState(state) self.state = state end
@@ -609,6 +759,7 @@ do
     check('the skill star appears', star ~= nil and star.visible)
     check('the favorite star appears', favorite ~= nil and favorite.visible)
     check('the star shows no priority', star and star.images[1]:find('priority_0') ~= nil)
+    check('tooltips are set for all states', star.tooltip_all_states == true and favorite.tooltip_all_states == true)
 
     game.listeners.AfTweakerSkillButton.handler({ component = star, string = star.id })
     check('a click sets the priority', star.images[1]:find('priority_1') ~= nil, star.images[1])
@@ -653,27 +804,112 @@ end
 
 do
     local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
-    local popup = world.options_list.parent
-    table.remove(world.slot.children)
-    popup.parent = world.root
-    table.insert(world.root.children, popup)
+    world.slot_keys = { slot_1 = 'first_chain', slot_2 = 'second_chain' }
     local second = node('slot', world.slots_list)
     second.context_id = 'slot_2'
-    world.slot_keys = { slot_1 = 'first_chain', slot_2 = 'second_chain' }
+    local second_list = node('options_list', node('building_construction_popup', second))
     local game = start(world)
     game.polls[1]()
-    game.polls[1]()
-    local star = world.options_list:Find('af_tweaker_favorite_button')
-    check('a shared popup without a context gets the star', star ~= nil)
-
     world.slot.hovered, second.hovered = false, true
     game.polls[1]()
-    game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
-    check('a crossed slot does not take the star', read_file(favorites_file) == 'first_chain\n', read_file(favorites_file))
-
+    local second_star = second_list:Find('af_tweaker_favorite_button')
+    world.slot.hovered, second.hovered = true, false
     game.polls[1]()
+    -- The star of the second slot is clicked before a poll sees the mouse there
+    game.listeners.AfTweakerFavoriteButton.handler({ component = second_star, string = second_star.id })
+    check('a click goes to the slot of its star', read_file(favorites_file) == 'second_chain\n', read_file(favorites_file))
+    check('the clicked star shows its own building', second_star.state == 'selected', second_star.state)
+    check('such a click: no errors', game.errors() == '', game.errors())
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    local second = node('slot', world.slots_list)
+    second.context_id = 'slot_2'
+    local game = start(world)
+    world.slot.hovered, second.hovered = false, true
+    game.polls[1]()
+    check('a popup of another slot gets no star', world.options_list:Find('af_tweaker_favorite_button') == nil)
+end
+
+do
+    local world = ui_world({ favorite_buildings_enabled = true, auto_skills_enabled = false })
+    local game = start(world)
+    game.polls[1]()
+    local star = world.options_list:Find('af_tweaker_favorite_button')
+    world.slot.context_id = nil
     game.listeners.AfTweakerFavoriteButton.handler({ component = star, string = star.id })
-    check('a slot the mouse stays on takes the star', read_file(favorites_file):find('second_chain', 1, true) ~= nil, read_file(favorites_file))
+    check('a star without a slot changes nothing', read_file(favorites_file):find('chain_first_level', 1, true) == nil, read_file(favorites_file))
+    check('a star without a slot is logged', game.errors():find('building not found', 1, true) ~= nil, game.errors())
+end
+
+-- Settings: the MCT file against the defaults of the script
+do
+    local mct_source = read_file('mods/warhammer_3/af-tweaker/script/mct/settings/af_tweaker.lua')
+    local mod_source = read_file(mod_path)
+    assert(mct_source ~= '' and mod_source ~= '', 'run it from the repository root')
+
+    local options, title = {}, nil
+    local option_methods = {
+        set_text = function() end,
+        set_tooltip_text = function() end,
+        set_default_value = function(self, value) self.default = value end,
+        set_is_global = function(self, value) self.is_global = value end,
+        slider_set_min_max = function(self, min, max) self.min, self.max = min, max end,
+        slider_set_step_size = function(self, step) self.step = step end
+    }
+    local mct_mod = {
+        set_title = function(_, text) title = text end,
+        set_author = function() end,
+        set_description = function() end,
+        add_new_section = function() end,
+        add_new_option = function(_, key, option_type)
+            options[key] = setmetatable({ type = option_type }, { __index = option_methods })
+            return options[key]
+        end
+    }
+    local env = setmetatable({
+        get_mct = function()
+            return { register_mod = function(_, key) assert(key == 'af_tweaker', key); return mct_mod end }
+        end
+    }, { __index = _G })
+    assert(load(mct_source, 'af_tweaker_mct', 't', env))()
+
+    -- The timings and the limits aren't settings of the player
+    local internal = { turn_start_delay = true, round_delay = true, skill_commit_rounds = true, ui_poll_ms = true, ui_poll_max_failures = true }
+    local defaults = {}
+
+    for key, value in mod_source:match('local settings = (%b{})'):gmatch('([%w_]+) = ([%w%.]+)') do
+        if value == 'true' or value == 'false' then
+            defaults[key] = value == 'true'
+        else
+            defaults[key] = tonumber(value)
+        end
+    end
+
+    for key, value in pairs(defaults) do
+        local option = options[key]
+        if internal[key] then
+            check(key .. ': not an MCT option', option == nil)
+        else
+            check('an MCT option for ' .. key, option ~= nil)
+            if option then
+                check(key .. ': the same default', option.default == value, option.default)
+                check(key .. ': global', option.is_global == true)
+                if option.type == 'slider' then
+                    check(key .. ': the default fits the slider',
+                        value >= option.min and value <= option.max and value % option.step == 0, value)
+                end
+            end
+        end
+    end
+
+    for key in pairs(options) do
+        check('a default for the MCT option ' .. key, defaults[key] ~= nil)
+    end
+
+    local version = mod_source:match("mod_version = '([%d%.]+)'")
+    check('the MCT title has the version of the script', title == 'AF Tweaker v' .. version, title)
 end
 
 print(failed == 0 and 'ALL PASSED' or (failed .. ' FAILED'))

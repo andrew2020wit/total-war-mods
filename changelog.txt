@@ -1,3 +1,4 @@
+2026.11.01 AF Tweaker v0.5.2: a click on a star always goes to the building of its own popup, the star is added only to the popup of the hovered slot, tooltips of the stars are set for all button states, a level up during the rounds no longer looks like a refused skill, a BOM in the favorites and priorities files is ignored
 2026.11.01 AF Armageddon v9.1.3: a culture missing from the culture groups is written to the error log once, not on each faction turn; with the log file off the script no longer builds its text
 2026.10.31 v9.1.2: multiplayer isn't supported, but there the mod now uses the default settings and the first player of the campaign to lower the risk of a desync; two cultures missing from the culture groups no longer count as one group
 2026.10.31 v9.1.1: settings window in Mod Configuration Tool (optional, global settings), the log file is off by default

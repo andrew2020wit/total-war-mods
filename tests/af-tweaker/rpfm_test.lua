@@ -95,6 +95,7 @@ local function install_model(world)
             local skill = index and world.skills[index + 1]
             if has_plain(expr, '.Status == "active"') then return skill.level < skill.total end
             if has(expr, '%.Key$') then return skill.key end
+            if has(expr, '%.Level$') then return skill.level end
             if has(expr, '%.Name$') then return skill.key end
             if has(expr, '%.Status$') then return 'active' end
             error('skill expression: ' .. expr)
