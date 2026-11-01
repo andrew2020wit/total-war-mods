@@ -11,9 +11,8 @@ change.
 ## What the mod does
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
-the AI faction bonuses — but **only** if that faction's culture differs from the human
-player's culture. `settings.bonus_for_same_culture`, off by default, covers the player's own
-culture too. The bonuses scale up over the course of
+the faction bonuses, whatever its culture: only the human player and the rebels get none.
+The bonuses scale up over the course of
 the campaign (later turns / more player regions → bigger bonus). It is meant to be used
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
@@ -81,7 +80,6 @@ defaults from the `settings` table in the script.
 
 | Option                            | Type     | Default | Meaning                                     |
 |-----------------------------------|----------|---------|---------------------------------------------|
-| `bonus_for_same_culture`          | checkbox | `false` | Bonuses for the player's own culture        |
 | `regions_percent`                 | slider   | `4`     | Percent of income per player region, 0-100  |
 | `time_percent`                    | slider   | `2`     | Percent of income per turn, 0-100           |
 | `experience_for_character`        | slider   | `200`   | Character XP multiplied by the turn number, 0-5000 |
@@ -99,7 +97,7 @@ set it too.
 Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
 the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
 and returns the defaults, as each player has their own values of global options, and "the
-player" of the culture check and of the region count is the first faction of
+player" of the region count is the first faction of
 `cm:get_human_factions()`, not the local one. It's the same faction in single player.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
@@ -143,7 +141,7 @@ tests check that.
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
 It covers the unit XP (when it's added and which units and factions get it), the character
-XP, the gold, the culture check, the effect bundle of each turn and the settings: the MCT
+XP, the gold, who gets the bonuses, the effect bundle of each turn and the settings: the MCT
 file against the defaults of the script, work without MCT, the log option. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the
 MCT options. The local functions of the script aren't reachable, so it checks what they lead

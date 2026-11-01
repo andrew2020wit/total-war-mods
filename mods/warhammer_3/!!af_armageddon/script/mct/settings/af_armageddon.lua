@@ -4,21 +4,13 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.2.1'
+local mod_version = '9.2.2'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
 mct_mod:set_title("AF Armageddon v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
 mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time.")
-
-mct_mod:add_new_section("who_gets_bonuses", "Who gets the bonuses")
-
-local same_culture = mct_mod:add_new_option("bonus_for_same_culture", "checkbox")
-same_culture:set_text("AI factions of your culture")
-same_culture:set_tooltip_text("AI factions of the same culture as the player get the bonuses too.")
-same_culture:set_default_value(false)
-same_culture:set_is_global(true)
 
 mct_mod:add_new_section("gold", "Gold")
 

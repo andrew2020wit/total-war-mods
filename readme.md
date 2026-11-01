@@ -6,7 +6,7 @@
 
 "Armageddon" modification increases difficulty for the middle and late game.
 
-AI gets various bonuses, but by default only if it has a different culture than the player.
+All AI factions get various bonuses, whatever their culture.
 
 ### Compatibility
 
@@ -23,7 +23,6 @@ The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfi
 (MCT). It's optional: without it the mod works with the default settings.
 The settings are global: one set of values for all campaigns.
 
-- who gets the bonuses: AI factions of your culture can get them too;
 - gold: the percent of the AI income per player region and per turn;
 - character experience: the amount and the start turn;
 - unit experience: the start turn and the turn interval;

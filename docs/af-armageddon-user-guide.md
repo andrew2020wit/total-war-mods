@@ -9,7 +9,8 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-By default only the factions of other cultures get them.
+Every AI faction gets them, whatever its culture: alliances, vassals and wars change nothing.
+Only rebels never get them.
 
 ## Installation
 
@@ -29,7 +30,6 @@ The version of the mod is shown in its title.
 
 | Section | Option | Default | What it does |
 |---|---|---:|---|
-| Who gets the bonuses | AI factions of your culture | Off | They get the bonuses too |
 | Gold | Percent of income per player region | 4 | Each of your regions adds this share of the AI income, 0-100 |
 | Gold | Percent of income per turn | 2 | Each turn of the campaign adds this share of the AI income, 0-100 |
 | Character experience | Experience per turn number | 200 | Multiplied by the turn number, 0-5000 |
@@ -40,20 +40,6 @@ The version of the mod is shown in its title.
 
 The settings are the same for all your campaigns. A change takes effect from the next turn of
 an AI faction.
-
-## Who gets the bonuses
-
-An AI faction gets the bonuses when its culture differs from yours. Only the culture counts:
-alliances, vassals and wars change nothing. Rebels never get them.
-
-The option **AI factions of your culture** gives the bonuses to the factions of your own culture
-too. For example, when you play as the Empire:
-
-| Faction | By default | With "your culture" |
-|---|---|---|
-| Greenskins | Yes | Yes |
-| Dwarfs | Yes | Yes |
-| Another Empire faction | No | Yes |
 
 ## What the AI gets
 
@@ -95,8 +81,7 @@ This bonus has no settings. Each faction has one bundle at a time, the one of th
 | 40 | +200 | +10 | +100 |
 
 Research applies to the faction, recruitment and growth to each of its provinces. The bundle
-lasts two turns and is renewed every turn, so when a faction stops getting the bonuses it
-loses the bundle soon after.
+lasts two turns and is renewed every turn.
 
 ## Compatibility with other mods
 
@@ -113,7 +98,7 @@ Balance depends on many things: mods, factions, random events, your skills and y
 you can expect is that the difficulty gradually grows.
 
 If it's too hard, lower the two gold percents or move the start turns later. If it's too easy,
-raise them, or give the bonuses to your culture too.
+raise the percents or move the start turns earlier.
 
 ## Good to know
 

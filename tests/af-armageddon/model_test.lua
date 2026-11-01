@@ -80,7 +80,7 @@ local function read_script_defaults()
     return defaults
 end
 
--- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_culture, player_culture,
+-- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_is_human, ai_is_rebel,
 -- player_regions, rank, no_general, null_unit }
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
@@ -145,9 +145,8 @@ local function play(world)
     }
     local ai = {
         name = function() return 'ai' end,
-        is_rebel = function() return false end,
-        is_human = function() return false end,
-        culture = function() return world.ai_culture or 'wh_main_grn_greenskins' end,
+        is_rebel = function() return world.ai_is_rebel == true end,
+        is_human = function() return world.ai_is_human == true end,
         income = function() return 1000 end,
         treasury = function() return 0 end,
         military_force_list = function() return list({ force }) end,
@@ -155,7 +154,6 @@ local function play(world)
         has_effect_bundle = function(_, key) return active_bundles[key] == true end
     }
     local player = {
-        culture = function() return world.player_culture or 'wh_main_emp_empire' end,
         region_list = function()
             local regions = {}
             for i = 1, world.player_regions or 0 do regions[i] = {} end
@@ -164,7 +162,6 @@ local function play(world)
     }
 
     local other_player = {
-        culture = function() return 'wh_main_grn_greenskins' end,
         region_list = function() return list({ {}, {}, {} }) end
     }
 
@@ -233,17 +230,6 @@ local function check_character_xp(name, world, expected)
     check(name, result.character_xp == expected, result.character_xp)
 end
 
--- The turn bonuses are the only sign of the culture check outside the script.
-local function check_culture(name, ai_culture, player_culture, gets_bonuses, settings)
-    local result = play({
-        settings = settings,
-        last_turn = 1,
-        ai_culture = ai_culture,
-        player_culture = player_culture
-    })
-    check(name, (result.gold_count > 0) == gets_bonuses, result.gold_count)
-end
-
 print('-- unit experience')
 
 check_turns('by default: every turn from turn 10', { last_turn = 14 }, '10,11,12,13,14')
@@ -277,10 +263,6 @@ check_turns('no experience at the top rank', { last_turn = 12, rank = 9 }, '')
 check_turns('one rank below the top still gets it', { last_turn = 10, rank = 8 }, '10')
 check_turns('no experience for an army without a general', { last_turn = 12, no_general = true }, '')
 check_turns('null units are skipped', { last_turn = 12, null_unit = true }, '')
-check_turns('no experience for the culture of the player', {
-    last_turn = 12,
-    ai_culture = 'wh_main_emp_empire'
-}, '')
 
 print('-- character experience')
 
@@ -301,33 +283,23 @@ check_turns('the units do not depend on the start turn of the characters', {
     last_turn = 11
 }, '10,11')
 
-print('-- cultures')
-
-local empire = 'wh_main_emp_empire'
-local same_culture_on = { bonus_for_same_culture = true }
-
-check_culture('another culture gets bonuses', 'wh_main_grn_greenskins', empire, true)
-check_culture('another culture of the Order gets them', 'wh_main_dwf_dwarfs', empire, true)
-check_culture('another culture of Chaos gets them', 'wh_main_chs_chaos', 'wh3_main_kho_khorne', true)
-check_culture('a culture from another mod gets them', 'unknown_culture', empire, true)
-check_culture('the same culture from another mod gets none', 'unknown_culture', 'unknown_culture', false)
-
-print('-- bonuses for the culture of the player')
-
-check_culture('off: the same culture gets none', empire, empire, false)
-check_culture('on: the same culture gets bonuses', empire, empire, true, same_culture_on)
-check_culture('on: another culture still gets them', 'wh_main_grn_greenskins', empire, true, same_culture_on)
+print('-- who gets the bonuses')
 
 do
-    local result = play({
-        settings = same_culture_on,
-        last_turn = 10,
-        ai_culture = empire
-    })
-    check('the same culture gets gold every turn', result.gold_count == 10, result.gold_count)
-    check('the same culture gets unit experience', result.xp_turns == '10', result.xp_turns)
-    check('the same culture gets character experience', result.character_xp == '10:2000', result.character_xp)
-    check('the same culture gets the effect bundle',
+    local function check_no_bonuses(name, world)
+        local result = play(world)
+        check(name, result.gold_count == 0 and result.xp_turns == '' and result.character_xp == ''
+            and next(result.bundles) == nil, result.gold_count)
+    end
+
+    check_no_bonuses('the player gets nothing', { last_turn = 10, ai_is_human = true })
+    check_no_bonuses('rebels get nothing', { last_turn = 10, ai_is_rebel = true })
+
+    local result = play({ last_turn = 10 })
+    check('an AI faction gets gold every turn', result.gold_count == 10, result.gold_count)
+    check('an AI faction gets unit experience', result.xp_turns == '10', result.xp_turns)
+    check('an AI faction gets character experience', result.character_xp == '10:2000', result.character_xp)
+    check('an AI faction gets the effect bundle',
         result.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1', result.bundles[10])
 end
 

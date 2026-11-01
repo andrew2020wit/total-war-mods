@@ -1,14 +1,13 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.2.1'
+local mod_version = '9.2.2'
 
 local mct_mod_key = 'af_armageddon'
 
 -- Defaults, used when MCT is not installed
 local settings = {
     enable_logging = false,
-    bonus_for_same_culture = false,
     regions_percent = 4,
     time_percent = 2,
     experience_for_character = 200,
@@ -74,10 +73,6 @@ local function log(text)
 
     file:write(tostring(text) .. "\n")
     file:close()
-end
-
-local function culture_gets_bonuses(culture, player_culture)
-    return culture ~= player_culture or get_setting('bonus_for_same_culture')
 end
 
 local function get_current_bundle_key(turn)
@@ -204,13 +199,6 @@ local function help_ai_each_turn(context)
     -- Not the local faction: in multiplayer it's different on each machine, a desync again
     local player_faction_name = cm:get_human_factions()[1]
     local player_faction = cm:get_faction(player_faction_name)
-
-    local current_culture = current_faction:culture()
-    local player_culture = player_faction:culture()
-
-    if not culture_gets_bonuses(current_culture, player_culture) then
-        return
-    end
 
     local player_regions_number = player_faction:region_list():num_items()
 
