@@ -372,11 +372,10 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto fuse: `FuseForPlayer` and `CanFuse` from the faction context, `IsFusable`, `FrameState` | Work in 0.7.0: 5 common and 3 uncommon pairs on turn 50 of a Vampire Counts campaign, each of the same category, no errors |
 | Auto fuse: `AncillariesFused` after `FuseForPlayer` from a script, the new item in the next round | Works in 0.7.0: the vanilla listener logged all 8 fusions, and 2 of the 3 uncommon pairs used items it had just spawned (Nightshroud, Ogre Blade); about 0.7 s per pair, no popups |
 | Auto fuse button in `global_pool > header`                           | Works in 0.7.0: the `[ui]` line of the click shows that path and 30x30 |
-| Auto fuse: equipped items are kept, the button doesn't cover the title, its inactive state | **Not confirmed yet**: the logs don't show them |
-
-Next in-game check of the auto fuse: with a common or uncommon item equipped on a character and
-a free item of the same rarity and category, click the button and check that the equipped one
-is still on the character; look where the button sits next to the title of the pool.
+| Auto fuse: equipped items are kept                                   | Works in 0.7.0: Vlad kept his Nightshroud, while the free Nightshroud of the same run was fused |
+| Auto fuse: no pair of the same rarity and category is left           | Works in 0.7.0: the pool after the run, seen by the user, has one free item per common or uncommon category |
+| Auto fuse button: to the right of the title, not covering it         | Works in 0.7.0, seen by the user |
+| Auto fuse button: inactive during a run                              | **Not confirmed yet**: a run of 8 pairs takes about 5 s |
 
 Next in-game check: click the star of a building through all four icons and look at the file;
 with a small budget, check in the log that three stars are built before one star; compare the
