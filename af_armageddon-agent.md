@@ -206,6 +206,16 @@ know the player in the main menu; it changes nothing.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`, and then the factions of the player's culture and of the
   cultures with the multiplier 0, which also lose their effect bundle).
+- Lua numbers in the game are single-precision floats: the log of 2026-11-05 shows the
+  multiplier `'0.1'` as `0.10000000149012`. The rounded interval and character experience still
+  come out whole (`2 / 0.1` rounds to 20), but don't compare such results with `==`, and
+  integers above 16,777,216 aren't exact. The tests run on Lua 5.4 with doubles and can't see
+  it.
+- v9.6.0 in the game, 2026-11-05, turn 51 of a Vampire Counts campaign with multipliers from 0.1
+  to 5: 71 factions got gold with the multiplier of their culture, the cultures with 1.5 and
+  more got unit experience on the odd turn 51 (interval 1), the two factions of the player's
+  culture got nothing, no error. The multiplier 0 and a negative income didn't occur in that
+  turn, so only the tests check them.
 
 ## Tests
 

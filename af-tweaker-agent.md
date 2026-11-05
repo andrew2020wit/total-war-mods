@@ -409,12 +409,13 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto fuse: equipped items are kept                                   | Works in 0.7.0: Vlad kept his Nightshroud, while the free Nightshroud of the same run was fused |
 | Auto fuse: no pair of the same rarity and category is left           | Works in 0.7.0: the pool after the run, seen by the user, has one free item per common or uncommon category |
 | Auto fuse button: to the right of the title, not covering it         | Works in 0.7.0, seen by the user |
-| Auto fuse button: inactive during a run                              | **Not confirmed yet**: a run of 8 pairs takes about 5 s |
+| Auto fuse button: inactive during a run                              | **Not confirmed yet**: a run of 8 pairs takes about 5 s; the `[ui]` lines of the log show only the clicked component |
 | Auto fuse button: inactive outside the player's turn (0.8.0)         | **Not confirmed yet**          |
-| Auto fuse: `first_ancillary_key()` of the event equals `AncillaryRecordContext.Key` (0.8.0) | **Not confirmed yet**: the keys of the vanilla log look like ancillary keys. Since 0.8.1 a mismatch doesn't stop the runs: the errors file gets "are not the keys of" once per session, and the first pair takes about 3 s |
+| Auto fuse: `first_ancillary_key()` of the event equals `AncillaryRecordContext.Key` (0.8.0) | Works in 0.8.1: 14 fusions on turn 52 of a Vampire Counts campaign, each confirmed by its own keys (no "another fusion" line, no errors file); the vanilla log shows the same keys in the same order, like `wh_main_anc_armour_charmed_shield` + `wh_main_anc_armour_dragonhelm` |
+| Auto fuse: the wait for a late new item (0.8.0)                      | Costs nothing in 0.8.1: 14 pairs in 9.5 s, about 0.7 s per pair as in 0.7.0 |
 | Auto fuse: a second command for a pair already fused does nothing (0.8.1) | **Not confirmed yet**: only after a hand fusion of copies of the pending pair |
-| Auto fuse: `FrameState != "..."` inside the query of the free items (0.8.0) | **Not confirmed yet**: the same `!=` as the categories |
-| Auto fuse: `auto_fuse_uncommon` off keeps the uncommon items (0.8.0) | **Not confirmed yet**          |
+| Auto fuse: `FrameState != "..."` inside the query of the free items (0.8.0) | Works in 0.8.1: the run found 8 common and 6 uncommon pairs, and no rare item was fused; a broken query would have found no item at all |
+| Auto fuse: `auto_fuse_uncommon` off keeps the uncommon items (0.8.0) | **Not confirmed yet**: the run of 0.8.1 had it on |
 
 Next in-game check: click the star of a building through all four icons and look at the file;
 with a small budget, check in the log that three stars are built before one star; compare the
