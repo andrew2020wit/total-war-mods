@@ -11,8 +11,10 @@ change.
 ## What the mod does
 
 A campaign difficulty mod. On each AI faction's turn start (`FactionTurnStart`), it grants
-the faction bonuses. Only the human player, the rebels and the cultures ticked in the settings
-get none. The bonuses scale up over the course of
+the faction bonuses. Only the human player, the rebels and the AI factions of the player's own
+culture get none, whatever the settings: there's no option for it. The culture of "the player"
+is the culture of the first faction of `cm:get_human_factions()`, see [Settings](#settings).
+The bonuses scale up over the course of
 the campaign (later turns / more player regions → bigger bonus). It is meant to be used
 together with the Radious mod but works standalone; mod order doesn't matter, and it can
 be added mid-campaign (just don't remove it afterwards).
@@ -37,7 +39,7 @@ Bonuses applied per eligible AI faction turn:
   (see `effect_bundles_turns`); older bundles are removed first so only one is active. The
   bonus multiplier doesn't change it.
 
-The **bonus multiplier** is the `bonus_multiplier_<culture>` option, 0.25 to 2, by default 1. A
+The **bonus multiplier** is the `bonus_multiplier_<culture>` option, 0.1 to 5, by default 1. A
 culture without that option (another mod's, or no MCT, or multiplayer) gets 1, and so does a
 value that isn't a positive number.
 
@@ -94,21 +96,25 @@ defaults from the `settings` table in the script.
 | `army_experience_start_turn`      | slider   | `10`    | First turn of unit XP, 1-200                |
 | `army_experience_turn_interval`   | slider   | `2`     | Unit XP on every n-th turn, 1-50, before the bonus multiplier |
 | `enable_logging`                  | checkbox | `false` | Writes `!!af_armageddon.txt`                |
-| `skip_bonuses_<culture>`          | checkbox | `false` | No bonuses for this culture, one per culture |
-| `bonus_multiplier_<culture>`      | dropdown | `'1'`   | `'0.25'` to `'2'` in steps of 0.25, one per culture, see [What the mod does](#what-the-mod-does) |
+| `bonus_multiplier_<culture>`      | dropdown | `'1'`   | `'0.1'`, `'0.25'` to `'2'` in steps of 0.25, `'3'`, `'4'`, `'5'`; one per culture, see [What the mod does](#what-the-mod-does) |
 
 Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
 them as soon as they're saved in its window, so a change applies from the next faction turn.
 
-All options but `skip_bonuses_<culture>` and `bonus_multiplier_<culture>` are global
-(`set_is_global(true)`): one value for all campaigns. New options must set it too, unless they
-belong to a campaign.
+All options but `bonus_multiplier_<culture>` are global (`set_is_global(true)`): one value for
+all campaigns. New options must set it too, unless they belong to a campaign.
+
+The checkboxes `skip_bonuses_<culture>` of v9.3.1-v9.4.0 are gone since v9.5.0: the culture of
+the player gets no bonuses, all others always get them. MCT ignores their values in old saves
+and in its settings file: it looks every saved key up with `get_option_by_key` and skips a key
+without an option.
 
 Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
 the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
 and returns the defaults, as each player has their own values of global options, and "the
-player" of the region count is the first faction of
-`cm:get_human_factions()`, not the local one. It's the same faction in single player.
+player" of the region count and of the culture without bonuses is the first faction of
+`cm:get_human_factions()`, not the local one. It's the same faction in single player. So in
+multiplayer the AI factions of the other humans' cultures do get the bonuses.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
 tests check that. The only exceptions are the options of the cultures, see below: the default
@@ -117,13 +123,14 @@ of `bonus_multiplier_<culture>` is `default_bonus_multiplier` of the script.
 ### The list of cultures
 
 The `cultures` table of the MCT file is the only list of cultures in the repository: the
-script builds the option keys (`skip_bonuses_<culture>`, `bonus_multiplier_<culture>`) from the
-culture of the faction. So these options have no entry in `settings`, and a culture from
-another mod has no options and always gets the bonuses as they are. `get_setting` passes `true`
-to `get_option_by_key`, otherwise MCT would write a warning to its log on each turn of such a
-faction.
+script builds the option key `bonus_multiplier_<culture>` from the culture of the faction. So
+these options have no entry in `settings`, and a culture from another mod has no option and
+gets the bonuses as they are, unless it's the culture of the player. `get_setting` passes
+`true` to `get_option_by_key`, otherwise MCT would write a warning to its log on each turn of
+such a faction. The culture of the player has its option too, as the settings window doesn't
+know the player in the main menu; it changes nothing.
 
-- The multiplier is a `dropdown`: its values are string keys (`'0.25'`...`'2'`), and the
+- The multiplier is a `dropdown`: its values are string keys (`'0.1'`...`'5'`), and the
   script turns them into numbers with `tonumber`. Their text is the same string, not a loc key:
   MCT shows a text without a loc entry as it is.
 
@@ -135,14 +142,15 @@ faction.
 - These options belong to a campaign (`set_is_global(false)`): MCT keeps them in the save, so
   the script reads them like any other option. A value set in the main menu applies to the
   next new campaign only. A campaign saved without them, for example one the mod was added
-  to or one saved before v9.4.0 for the multipliers, has the defaults (no culture skipped, all
-  multipliers 1), whatever the menu says.
+  to or one saved before v9.4.0, has the defaults (all multipliers 1), whatever the menu says.
 - `set_text` gets the loc key `cultures_name_<culture>` of the game, so the names are in the
   language of the game. A key without text is shown as it is.
-- The two sections of the cultures are the last ones. MCT gives each of the two columns the
-  same number of sections, whatever their height, and the columns scroll. With six sections
-  that's three in each: the lists are in the second column, after Debug, and the other
-  settings stay in view. A new section would break that split.
+- The section of the cultures is the last one. MCT puts `ceil(n / 2)` sections into the first
+  column and the rest into the second, whatever their height (`Settings.lua` of MCT), and the
+  columns scroll. With five sections the first column has Gold and both experiences, the
+  second has Debug and the long list of the cultures, so the other settings stay in view. A new
+  section would break that split. MCT adds its own `default` section only when an option comes
+  before any section, which isn't the case here.
 
 ## Toolchain
 
@@ -180,13 +188,14 @@ faction.
   nearly all the others were at level 6 and above. The log of one turn can't say why, it may be
   garrison commanders: compare the characters over several turns before drawing conclusions.
 - This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
-  early in `help_ai_each_turn`).
+  early in `help_ai_each_turn`, and then the factions of the player's culture).
 
 ## Tests
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
 It covers the unit XP (when it's added and which units and factions get it), the character
-XP, the gold, who gets the bonuses, the bonus multiplier of the cultures, the effect bundle of
+XP, the gold, who gets the bonuses (the culture of the player included), the bonus multiplier
+of the cultures, the effect bundle of
 each turn and the settings: the MCT
 file against the defaults of the script, work without MCT, the log option. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the

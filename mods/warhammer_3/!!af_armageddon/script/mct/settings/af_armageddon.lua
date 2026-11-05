@@ -4,13 +4,13 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.4.0'
+local mod_version = '9.5.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
 mct_mod:set_title("AF Armageddon v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
-mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time.")
+mct_mod:set_description("Increases difficulty for the middle and late game: AI factions of other cultures than the player's get bonuses that grow over time.")
 
 mct_mod:add_new_section("gold", "Gold")
 
@@ -74,9 +74,9 @@ logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder.")
 logging:set_default_value(false)
 logging:set_is_global(true)
 
--- The last sections: MCT splits the sections between two columns by their number, so these long
--- lists get the scroll of the second column and don't push the other settings down
-mct_mod:add_new_section("skip_bonuses", "Skip the bonuses for cultures")
+-- The last section: MCT puts ceil(n / 2) sections into the first column, so this long list gets
+-- the scroll of the second column and doesn't push the other settings down
+mct_mod:add_new_section("bonus_multiplier", "Bonus multiplier for cultures")
 
 -- The keys of db/cultures_tables, by their English names, without the prologue Kislev
 local cultures = {
@@ -108,20 +108,8 @@ local cultures = {
     "wh_dlc05_wef_wood_elves",
 }
 
-for _, culture in ipairs(cultures) do
-    local skip_culture = mct_mod:add_new_option("skip_bonuses_" .. culture, "checkbox")
-    -- A loc key of the game: MCT shows the name in the language of the game
-    skip_culture:set_text("cultures_name_" .. culture)
-    skip_culture:set_tooltip_text("AI factions of this culture get no bonuses.")
-    skip_culture:set_default_value(false)
-    -- Each campaign has its own list: MCT keeps these values in the save
-    skip_culture:set_is_global(false)
-end
-
-mct_mod:add_new_section("bonus_multiplier", "Bonus multiplier for cultures")
-
 -- The keys of the dropdown are strings, the script turns them into numbers
-local bonus_multipliers = { "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2" }
+local bonus_multipliers = { "0.1", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2", "3", "4", "5" }
 local bonus_multiplier_values = {}
 
 for _, multiplier in ipairs(bonus_multipliers) do
@@ -135,9 +123,10 @@ end
 
 for _, culture in ipairs(cultures) do
     local bonus_multiplier = mct_mod:add_new_option("bonus_multiplier_" .. culture, "dropdown")
+    -- A loc key of the game: MCT shows the name in the language of the game
     bonus_multiplier:set_text("cultures_name_" .. culture)
-    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change.")
+    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change. The culture of the player gets no bonuses, whatever this value.")
     bonus_multiplier:add_dropdown_values(bonus_multiplier_values)
-    -- Each campaign has its own values, like the skipped cultures
+    -- Each campaign has its own values: MCT keeps them in the save
     bonus_multiplier:set_is_global(false)
 end

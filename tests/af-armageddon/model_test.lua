@@ -89,7 +89,8 @@ local function read_script_defaults()
 end
 
 -- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_is_human, ai_is_rebel,
--- ai_culture, player_regions, rank, no_general, null_unit, faction_turns }
+-- ai_culture, player_culture, other_culture, player_regions, rank, no_general, null_unit, faction_turns }
+-- The AI is of the greenskins, the player of the empire and the other human player of the dwarfs by default.
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
 -- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
@@ -136,9 +137,7 @@ local function play(world)
                     return {
                         get_option_by_key = function(_, option_key)
                             -- A culture from another mod has no option
-                            local is_culture_option = option_key:find('^skip_bonuses_')
-                                or option_key:find('^bonus_multiplier_')
-                            if is_culture_option and not mct_options[option_key] then
+                            if option_key:find('^bonus_multiplier_') and not mct_options[option_key] then
                                 return nil
                             end
                             assert(mct_options[option_key], 'no such MCT option: ' .. option_key)
@@ -183,6 +182,7 @@ local function play(world)
         has_effect_bundle = function(_, key) return active_bundles[key] == true end
     }
     local player = {
+        culture = function() return world.player_culture or 'wh_main_emp_empire' end,
         region_list = function()
             local regions = {}
             for i = 1, world.player_regions or 0 do regions[i] = {} end
@@ -191,6 +191,7 @@ local function play(world)
     }
 
     local other_player = {
+        culture = function() return world.other_culture or 'wh_main_dwf_dwarfs' end,
         region_list = function() return list({ {}, {}, {} }) end
     }
 
@@ -328,30 +329,41 @@ do
     check_no_bonuses('the player gets nothing', { last_turn = 10, ai_is_human = true })
     check_no_bonuses('rebels get nothing', { last_turn = 10, ai_is_rebel = true })
 
-    local skip_greenskins = { skip_bonuses_wh_main_grn_greenskins = true }
+    local player_culture = 'wh_main_emp_empire'
 
-    check_no_bonuses('a skipped culture gets nothing', { settings = skip_greenskins, last_turn = 10 })
+    check_no_bonuses('the culture of the player gets nothing', { ai_culture = player_culture, last_turn = 10 })
+    check_no_bonuses('the culture of the player gets nothing, whatever its multiplier', {
+        settings = { bonus_multiplier_wh_main_emp_empire = '5' },
+        ai_culture = player_culture,
+        last_turn = 10
+    })
+    check_no_bonuses('the culture of the player from another mod gets nothing', {
+        ai_culture = 'unknown_culture',
+        player_culture = 'unknown_culture',
+        last_turn = 10
+    })
+    check_no_bonuses('without MCT the culture of the player gets nothing',
+        { no_mct = true, ai_culture = player_culture, last_turn = 10 })
+    check_no_bonuses('multiplayer: the culture of the first player gets nothing on each machine',
+        { is_mp = true, other_is_local = true, ai_culture = player_culture, last_turn = 10 })
 
-    local other = play({ settings = { skip_bonuses_wh_main_emp_empire = true }, last_turn = 3 })
-    check('the other cultures still get the bonuses', other.gold_count == 3, other.gold_count)
+    local other = play({ last_turn = 3 })
+    check('another culture gets the bonuses', other.gold_count == 3, other.gold_count)
 
-    local unknown = play({ settings = skip_greenskins, last_turn = 3, ai_culture = 'unknown_culture' })
+    local unknown = play({ last_turn = 3, ai_culture = 'unknown_culture' })
     check('a culture from another mod gets the bonuses', unknown.gold_count == 3, unknown.gold_count)
 
-    local ticked = play({ changes = { [3] = skip_greenskins }, last_turn = 5 })
-    check('a culture ticked during the campaign stops getting them', ticked.gold_count == 2, ticked.gold_count)
-
     local no_mct = play({ no_mct = true, last_turn = 3 })
-    check('without MCT no culture is skipped', no_mct.gold_count == 3, no_mct.gold_count)
+    check('without MCT another culture gets the bonuses', no_mct.gold_count == 3, no_mct.gold_count)
 
-    local multiplayer = play({ is_mp = true, settings = skip_greenskins, last_turn = 3 })
-    check('multiplayer: no culture is skipped', multiplayer.gold_count == 3, multiplayer.gold_count)
+    -- Multiplayer isn't supported: the rules know one player, the first one
+    local multiplayer = play({ is_mp = true, other_is_local = true, ai_culture = 'wh_main_dwf_dwarfs', last_turn = 3 })
+    check('multiplayer: the culture of another human player gets the bonuses',
+        multiplayer.gold_count == 3, multiplayer.gold_count)
 
-    local logged = play({
-        settings = { enable_logging = true, skip_bonuses_wh_main_grn_greenskins = true },
-        last_turn = 1
-    })
-    check('the log has the skipped faction', logged.log:find('skip bonuses, faction: ai', 1, true) ~= nil, logged.log)
+    local logged = play({ settings = { enable_logging = true }, ai_culture = player_culture, last_turn = 1 })
+    check('the log has the faction of the culture of the player',
+        logged.log:find('no bonuses for the culture of the player, faction: ai', 1, true) ~= nil, logged.log)
 
     local result = play({ last_turn = 10 })
     check('an AI faction gets gold every turn', result.gold_count == 10, result.gold_count)
@@ -431,8 +443,12 @@ do
     check_gold('gold: multiplied by 0.5', { settings = greenskins('0.5'), last_turn = 1, player_regions = 2 }, 50)
     check_gold('gold: multiplied by 2', { settings = greenskins('2'), last_turn = 1, player_regions = 2 }, 200)
     check_gold('gold: multiplied by 0.25', { settings = greenskins('0.25'), last_turn = 1, player_regions = 2 }, 25)
+    check_gold('gold: multiplied by 0.1', { settings = greenskins('0.1'), last_turn = 1, player_regions = 2 }, 10)
+    check_gold('gold: multiplied by 3', { settings = greenskins('3'), last_turn = 1, player_regions = 2 }, 300)
+    check_gold('gold: multiplied by 4', { settings = greenskins('4'), last_turn = 1, player_regions = 2 }, 400)
+    check_gold('gold: multiplied by 5', { settings = greenskins('5'), last_turn = 1, player_regions = 2 }, 500)
     check_gold('gold: the multiplier of another culture changes nothing', {
-        settings = { bonus_multiplier_wh_main_emp_empire = '2' },
+        settings = { bonus_multiplier_wh_main_dwf_dwarfs = '2' },
         last_turn = 1
     }, 20)
     check_gold('gold: a culture from another mod gets 1', {
@@ -454,6 +470,14 @@ do
         settings = greenskins('1.75'),
         last_turn = 11
     }, '10:3500,11:3850')
+    check_character_xp('character experience: multiplied by 0.1', {
+        settings = greenskins('0.1'),
+        last_turn = 11
+    }, '10:200,11:220')
+    check_character_xp('character experience: multiplied by 5', {
+        settings = greenskins('5'),
+        last_turn = 11
+    }, '10:10000,11:11000')
     check_character_xp('character experience: rounded to an integer', {
         settings = greenskins('0.25', { experience_for_character = 50 }),
         last_turn = 11
@@ -473,26 +497,22 @@ do
 
     interval_turns('2 makes the interval twice as short', '2', 13, '10,11,12,13')
     interval_turns('0.5 makes it twice as long', '0.5', 20, '12,16,20')
+    interval_turns('0.1: every 20th turn', '0.1', 40, '20,40')
     interval_turns('0.25: every 8th turn', '0.25', 24, '16,24')
     interval_turns('0.75: 2.67 is rounded to 3', '0.75', 18, '12,15,18')
     interval_turns('1.25: 1.6 is rounded to 2', '1.25', 14, '10,12,14')
     interval_turns('1.5: 1.33 is rounded to 1', '1.5', 12, '10,11,12')
     interval_turns('1.75: 1.14 is rounded to 1', '1.75', 12, '10,11,12')
+    interval_turns('3: 0.67 is rounded to 1', '3', 12, '10,11,12')
+    interval_turns('5: 0.4 is rounded to 0, the interval stays 1', '5', 12, '10,11,12')
     interval_turns('a half is rounded up: 3 / 2 = 1.5 is 2', '2', 14, '10,12,14',
         { army_experience_turn_interval = 3 })
     interval_turns('a changed interval is divided too: 5 / 0.5 = 10', '0.5', 30, '10,20,30',
         { army_experience_turn_interval = 5 })
     interval_turns('the interval never goes below 1', '2', 12, '10,11,12', { army_experience_turn_interval = 1 })
-    -- Not a value of the dropdown, only the guard: 1 / 4 rounds to 0
-    interval_turns('the interval never goes below 1, even at 0.25', '4', 12, '10,11,12',
+    interval_turns('the interval never goes below 1: 1 / 4 = 0.25', '4', 12, '10,11,12',
         { army_experience_turn_interval = 1 })
     interval_turns('the start turn stays', '2', 11, '10,11', { army_experience_start_turn = 10 })
-
-    local skipped = play({
-        settings = greenskins('2', { skip_bonuses_wh_main_grn_greenskins = true }),
-        last_turn = 10
-    })
-    check('a skipped culture gets nothing whatever its multiplier', skipped.gold_count == 0, skipped.gold_count)
 
     local bundles = play({ settings = greenskins('0.25'), last_turn = 40 })
     check('the effect bundle does not depend on the multiplier',
@@ -524,28 +544,18 @@ do
         end
     end
 
-    local culture_options = 0
     local multiplier_options = 0
-    local multiplier_values = '0.25,0.5,0.75,1,1.25,1.5,1.75,2'
+    local multiplier_values = '0.1,0.25,0.5,0.75,1,1.25,1.5,1.75,2,3,4,5'
 
     for key, option in pairs(mct_options) do
-        local culture = key:match('^skip_bonuses_(.+)')
         local multiplier_culture = key:match('^bonus_multiplier_(.+)')
 
-        if culture then
-            culture_options = culture_options + 1
-            check(key .. ': a checkbox', option.type == 'checkbox', option.type)
-            check(key .. ': off by default', option.default == false, option.default)
-            check(key .. ': for each campaign', option.is_global == false, option.is_global)
-            check(key .. ': the name from the game', option.text == 'cultures_name_' .. culture, option.text)
-            check(key .. ': has a multiplier', mct_options['bonus_multiplier_' .. culture] ~= nil)
-        elseif multiplier_culture then
+        if multiplier_culture then
             multiplier_options = multiplier_options + 1
             check(key .. ': a dropdown', option.type == 'dropdown', option.type)
             check(key .. ': 1 by default', option.default == '1', option.default)
             check(key .. ': for each campaign', option.is_global == false, option.is_global)
             check(key .. ': the name from the game', option.text == 'cultures_name_' .. multiplier_culture, option.text)
-            check(key .. ': has a skip option', mct_options['skip_bonuses_' .. multiplier_culture] ~= nil)
 
             local keys, texts = {}, {}
             for _, value in ipairs(option.values or {}) do
@@ -559,8 +569,11 @@ do
         end
     end
 
-    check('an option for each culture', culture_options == 26, culture_options)
     check('a multiplier for each culture', multiplier_options == 26, multiplier_options)
+
+    for key in pairs(mct_options) do
+        check('no option to skip a culture: ' .. key, key:find('^skip_bonuses_') == nil)
+    end
     check('the interval of the units is 2 by default', defaults.army_experience_turn_interval == 2)
 
     check('logging is off by default', defaults.enable_logging == false)
@@ -611,17 +624,17 @@ do
     check('the start line has the version', on.log:find('v. ' .. version, 1, true) ~= nil)
 
     local logged = play({
-        settings = { enable_logging = true, regions_percent = 10, skip_bonuses_wh_main_emp_empire = true },
+        settings = { enable_logging = true, regions_percent = 10, bonus_multiplier_wh_main_dwf_dwarfs = '3' },
         last_turn = 2,
         faction_turns = 3
     })
     check('the settings are logged once per turn', select(2, logged.log:gsub('settings, turn ', '')) == 2, logged.log)
     check('the log has a changed setting', logged.log:find('regions_percent: 10', 1, true) ~= nil, logged.log)
     check('the log has a default setting', logged.log:find('time_percent: 2', 1, true) ~= nil, logged.log)
-    check('the log has a ticked culture',
-        logged.log:find('skip_bonuses_wh_main_emp_empire: true', 1, true) ~= nil, logged.log)
-    check('the log has a culture that is not ticked',
-        logged.log:find('skip_bonuses_wh_main_grn_greenskins: false', 1, true) ~= nil, logged.log)
+    check('the log has a changed multiplier',
+        logged.log:find('bonus_multiplier_wh_main_dwf_dwarfs: 3', 1, true) ~= nil, logged.log)
+    check('the log has a default multiplier',
+        logged.log:find('bonus_multiplier_wh_main_grn_greenskins: 1', 1, true) ~= nil, logged.log)
 
     for key in pairs(mct_options) do
         check('the log has the option ' .. key, logged.log:find(key .. ': ', 1, true) ~= nil)

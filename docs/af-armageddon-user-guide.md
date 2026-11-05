@@ -9,9 +9,9 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-Every AI faction gets them: alliances, vassals and wars change nothing. Rebels never get them.
-In the settings you can turn them off for whole cultures, or make them smaller or bigger for a
-culture.
+Every AI faction of another culture than yours gets them: alliances, vassals and wars change
+nothing. The AI factions of your own culture and the rebels never get them. In the settings you
+can make the bonuses smaller or bigger for each culture.
 
 ## Installation
 
@@ -40,44 +40,39 @@ The version of the mod is shown in its title.
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Every n-th turn | 2 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50. Divided by the bonus multiplier of the culture |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
-| Skip the bonuses for cultures | One checkbox for each culture | Off | The AI factions of this culture get no bonuses |
-| Bonus multiplier for cultures | One list for each culture | 1 | 0.25 to 2: makes the gold and the experience of this culture smaller or bigger |
+| Bonus multiplier for cultures | One list for each culture | 1 | 0.1 to 5: makes the gold and the experience of this culture smaller or bigger |
 
-The settings are the same for all your campaigns, except the skipped cultures and the bonus
-multipliers. A change takes effect from the next turn of an AI faction.
+The settings are the same for all your campaigns, except the bonus multipliers. A change takes
+effect from the next turn of an AI faction.
 
-### Skipping cultures
+### Your own culture
 
-The last two sections list the cultures of the game and its DLCs. They're long, so scroll the
-right column of the window to see all of them.
-
-Tick a culture and its AI factions stop getting all the bonuses. Your own culture is on the list
-too: by default the other factions of your culture get the bonuses like everybody else.
-
-Each campaign has its own list. A change made in a campaign applies to that campaign only. In
-the main menu it applies to the next campaign you start, not to the ones already running. If
-you add the mod to a running campaign, no culture is skipped until you tick it there.
-
-Cultures from other mods aren't on the list, so they always get the bonuses.
+The AI factions of your culture never get the bonuses, whatever the settings. Its multiplier is
+on the list too, as the main menu doesn't know which culture you'll play, but it changes
+nothing. All other cultures always get the bonuses.
 
 ### Bonus multiplier for cultures
 
-Each culture has a multiplier: 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75 or 2. With the default 1 the
-culture gets the bonuses as they are. The multiplier changes:
+The last section lists the cultures of the game and its DLCs. It's long, so scroll the right
+column of the window to see all of them.
+
+Each culture has a multiplier: 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 or 5. With the
+default 1 the culture gets the bonuses as they are. The multiplier changes:
 
 - the gold: multiplied by it;
 - the character experience: multiplied by it;
 - the unit experience: **Every n-th turn** is divided by it and rounded, but it's never less
-  than 1. With the default 2: the multiplier 2 gives a rank every turn, 0.5 every 4th turn,
-  0.75 every 3rd turn, 1.25 every 2nd turn, 1.5 and 1.75 every turn.
+  than 1. With the default 2: the multiplier 0.1 gives a rank every 20th turn, 0.25 every 8th
+  turn, 0.5 every 4th turn, 0.75 every 3rd turn, 1 and 1.25 every 2nd turn, 1.5 and more every
+  turn.
 
-The effect bundle stays the same, and so do the start turns. A skipped culture gets no bonuses,
-whatever its multiplier.
+The effect bundle stays the same, and so do the start turns. To weaken a culture as much as
+possible, give it 0.1.
 
-The multipliers belong to a campaign, like the skipped cultures: a change made in a campaign
-applies to that campaign only, one made in the main menu applies to the next campaign. If you
-add the mod to a running campaign, every culture has 1 until you change it there. Cultures from
-other mods always have 1.
+Each campaign has its own multipliers. A change made in a campaign applies to that campaign
+only. In the main menu it applies to the next campaign you start, not to the ones already
+running. If you add the mod to a running campaign, every culture has 1 until you change it
+there. Cultures from other mods aren't on the list, so they always have 1.
 
 ## What the AI gets
 
@@ -140,9 +135,9 @@ AF Armageddon was made to be used with **Radious**, and it's compatible with any
 Balance depends on many things: mods, factions, random events, your skills and your style. All
 you can expect is that the difficulty gradually grows.
 
-If it's too hard, lower the two gold percents, move the start turns later, lower the multipliers
-of the strongest cultures or skip some cultures. If it's too easy, raise the percents, move the
-start turns earlier or raise the multipliers.
+If it's too hard, lower the two gold percents, move the start turns later or lower the
+multipliers of the strongest cultures, down to 0.1. If it's too easy, raise the percents, move
+the start turns earlier or raise the multipliers, up to 5.
 
 ## Good to know
 

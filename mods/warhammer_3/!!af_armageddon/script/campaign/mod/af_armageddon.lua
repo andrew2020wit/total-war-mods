@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.4.0'
+local mod_version = '9.5.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -84,13 +84,7 @@ local function log(text)
     file:close()
 end
 
--- The cultures are listed in the MCT file only. A culture from another mod has no option there,
--- so it isn't skipped
-local function culture_is_skipped(culture)
-    return get_setting('skip_bonuses_' .. culture)
-end
-
--- The values of the dropdown are strings, '0.25' to '2'
+-- The values of the dropdown are strings, '0.1' to '5'
 local function get_bonus_multiplier(culture)
     local multiplier = tonumber(get_setting('bonus_multiplier_' .. culture))
 
@@ -268,19 +262,20 @@ local function help_ai_each_turn(context)
         return
     end
 
+    -- Not the local faction: in multiplayer it's different on each machine, a desync again
+    local player_faction_name = cm:get_human_factions()[1]
+    local player_faction = cm:get_faction(player_faction_name)
+
     local culture = current_faction:culture()
 
-    if culture_is_skipped(culture) then
-        log('skip bonuses, faction: ' .. current_faction_name)
+    -- The culture of the player gets no bonuses, whatever the settings
+    if culture == player_faction:culture() then
+        log('no bonuses for the culture of the player, faction: ' .. current_faction_name)
         return
     end
 
     -- For the gold, the character experience and the unit experience, not for the effect bundle
     local bonus_multiplier = get_bonus_multiplier(culture)
-
-    -- Not the local faction: in multiplayer it's different on each machine, a desync again
-    local player_faction_name = cm:get_human_factions()[1]
-    local player_faction = cm:get_faction(player_faction_name)
 
     local player_regions_number = player_faction:region_list():num_items()
 
