@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.8.0'
+local mod_version = '0.8.1'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -63,6 +63,11 @@ local skill_priorities = {}
 
 -- The run of the auto fuse button, nil while none goes
 local fuse_run = nil
+
+-- Whether the keys of AncillariesFused are the keys the script reads from the records: nil until
+-- a fusion tells. false, after a fusion whose event never had its keys, makes any event of the
+-- faction confirm the pending fusion for the rest of the session, as in 0.7.0.
+local fuse_event_keys_match = nil
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -1069,7 +1074,19 @@ local function check_last_fusion(run)
             return false
         end
 
-        error('the game did not fuse ' .. pending.title)
+        -- Events came, but none with the keys of the pair, and no event ever had them: the keys
+        -- of the event are likely not the keys of the records. One of those events is taken for
+        -- this fusion, and from now on any event confirms. After a matching event the keys are
+        -- known to match, and a fusion without its event is an error.
+        if pending.other_fusions == 0 or fuse_event_keys_match ~= nil then
+            error('the game did not fuse ' .. pending.title)
+        end
+
+        fuse_event_keys_match = false
+        pending.is_confirmed = true
+        pending.other_fusions = pending.other_fusions - 1
+        log_errors('auto fuse: the keys of AncillariesFused (' .. pending.other_keys .. ') are not the keys of '
+            .. pending.title .. ', fusions are confirmed by the event alone from now on')
     end
 
     local item_number = get_faction_value(run.faction_cqi, 'AncillaryList.Size') or 0
@@ -1144,29 +1161,49 @@ end
 
 -- The event of the pending fusion, or of one the player makes by hand with the Fuse button of the
 -- game during the run: the keys of the items tell them apart. The other one only changes the
--- number of items the pending fusion waits for.
+-- number of items the pending fusion waits for. A hand fusion of copies of the pending pair has
+-- the same keys and is taken for it; the event of the pending pair then counts as the other one,
+-- so the numbers of items stay right.
 local function on_ancillaries_fused(context)
     local pending = fuse_run.pending
-    local first_key = context:first_ancillary_key()
-    local second_key = context:second_ancillary_key()
+    local first_key = tostring(context:first_ancillary_key())
+    local second_key = tostring(context:second_ancillary_key())
     local is_pending_pair = (first_key == pending.first_key and second_key == pending.second_key)
         or (first_key == pending.second_key and second_key == pending.first_key)
 
-    if is_pending_pair and not pending.is_confirmed then
+    if not pending.is_confirmed and (is_pending_pair or fuse_event_keys_match == false) then
         pending.is_confirmed = true
+
+        if is_pending_pair then
+            fuse_event_keys_match = true
+        end
     else
         pending.other_fusions = pending.other_fusions + 1
-        log('auto fuse: another fusion during the run, ' .. tostring(first_key) .. ' + ' .. tostring(second_key))
+        pending.other_keys = first_key .. ' + ' .. second_key
+        log('auto fuse: another fusion during the run, ' .. pending.other_keys)
     end
 end
 
+-- The local faction and its name, nil without one, rather than an error on every poll
+local function get_local_faction()
+    local faction_name = cm:get_local_faction_name(true)
+
+    return faction_name and cm:get_faction(faction_name) or nil, faction_name
+end
+
 local function is_local_players_turn()
-    return cm:get_faction(cm:get_local_faction_name(true)):is_factions_turn()
+    local faction = get_local_faction()
+
+    return faction ~= nil and faction:is_factions_turn()
 end
 
 local function start_auto_fuse()
-    local faction_name = cm:get_local_faction_name(true)
-    local faction = cm:get_faction(faction_name)
+    local faction, faction_name = get_local_faction()
+
+    if not faction then
+        log('auto fuse: no local faction')
+        return
+    end
 
     -- The game lets the player fuse only in their own turn
     if not faction:is_factions_turn() then

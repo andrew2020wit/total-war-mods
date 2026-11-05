@@ -42,7 +42,9 @@ end
 -- The game fuses a pair world.fuse_delay rounds after the command, never with world.refuse_fusions,
 -- and the new item comes world.new_item_delays[n] (or world.new_item_delay) rounds after the event
 -- of the n-th fusion. With world.keep_items the game sends the event and adds the new item, but the
--- pair stays. world.frame_state_reads counts the reads of FrameState by item key.
+-- pair stays. A command for an item that is gone does nothing. The keys of the events get
+-- world.event_key_prefix. world.frame_state_reads counts the reads of FrameState by item key.
+-- world.no_local_faction: cm:get_local_faction_name returns false.
 local function start(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -127,8 +129,11 @@ local function start(world)
         callback = function(_, f) table.insert(timers, f) end,
         add_first_tick_callback = function(_, f) table.insert(first_tick, f) end,
         repeat_real_callback = function(_, f) table.insert(polls, f) end,
-        get_faction = function() return faction end,
-        get_local_faction_name = function() return 'player' end,
+        get_faction = function(_, name)
+            if not name then return false end
+            return faction
+        end,
+        get_local_faction_name = function() return not world.no_local_faction and 'player' end,
         is_multiplayer = function() return world.is_mp == true end,
         turn_number = function() return 1 end,
         get_building_level_upgrades = function(_, key)
@@ -208,10 +213,11 @@ local function start(world)
     end
 
     local function fire_fused(faction_name, first_key, second_key)
+        local prefix = world.event_key_prefix or ''
         local context = {
             faction = function() return { name = function() return faction_name end } end,
-            first_ancillary_key = function() return first_key end,
-            second_ancillary_key = function() return second_key end
+            first_ancillary_key = function() return prefix .. first_key end,
+            second_ancillary_key = function() return prefix .. second_key end
         }
         local listener = listeners.AfTweakerAncillariesFused
         if listener.cond(context) then listener.handler(context) end
@@ -231,7 +237,16 @@ local function start(world)
 
         for i = #pending_fusions, 1, -1 do
             local fusion = pending_fusions[i]
-            if fusion.rounds == 0 then
+            local function is_there(data)
+                for _, other in ipairs(world.items) do
+                    if other == data then return true end
+                end
+                return false
+            end
+            if fusion.rounds == 0 and not (is_there(fusion.first) and is_there(fusion.second)) then
+                -- The game has nothing to fuse: no event and no new item
+                table.remove(pending_fusions, i)
+            elseif fusion.rounds == 0 then
                 table.remove(pending_fusions, i)
                 if not world.keep_items then
                     remove_item(fusion.first)
@@ -429,16 +444,20 @@ local function start(world)
     end
 
     -- The player fuses two items by hand with the Fuse button of the game
+    function game.manual_fuse_items(first, second)
+        remove_item(first)
+        remove_item(second)
+        fire_fused('player', first.key, second.key)
+        table.insert(world.items, { key = 'manual_new', level = next_level[first.level], category = first.category })
+    end
+
     function game.manual_fuse(first_key, second_key)
         local pair = {}
         for _, data in ipairs(world.items) do
             if data.key == first_key or data.key == second_key then table.insert(pair, data) end
         end
         assert(#pair == 2, 'manual fuse: ' .. first_key .. ' + ' .. second_key)
-        remove_item(pair[1])
-        remove_item(pair[2])
-        fire_fused('player', first_key, second_key)
-        table.insert(world.items, { key = 'manual_new', level = next_level[pair[1].level], category = pair[1].category })
+        game.manual_fuse_items(pair[1], pair[2])
     end
 
     game.fire_fused = fire_fused
@@ -1374,6 +1393,50 @@ do
         fusions(world) == 'c1+c2' and game.errors() == '', fusions(world) .. ' ' .. game.errors())
     check('auto fuse: a fusion by hand is logged', game.log():find('another fusion during the run, a1 + a2', 1, true) ~= nil, game.log())
     check('auto fuse: the items of both fusions are left', item_keys(world) == 'manual_new new_1', item_keys(world))
+end
+
+do
+    -- The keys of the event aren't the keys of the records
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common'), item('c3', 'common'), item('c4', 'common') })
+    world.event_key_prefix = 'event_'
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: keys of the event that differ from the records stop nothing',
+        fusions(world) == 'c1+c2 c3+c4 new_1+new_2', fusions(world) .. ' ' .. game.errors())
+    check('auto fuse: such keys are written to the errors once',
+        count(game.errors(), 'are not the keys of') == 1, game.errors())
+    world.items = { item('c5', 'common'), item('c6', 'common') }
+    game.fuse()
+    check('auto fuse: after such keys a run of the same session takes no wait',
+        count(game.errors(), 'are not the keys of') == 1 and game.steps == 1, game.steps)
+end
+
+do
+    -- Four copies of one item: the player fuses two of them by hand while the pair of the script
+    -- is on its way, and the event of the hand fusion has the keys of the pending pair
+    local copies = { item('k', 'common'), item('k', 'common'), item('k', 'common'), item('k', 'common') }
+    local world = fuse_world({ copies[1], copies[2], copies[3], copies[4] })
+    world.fuse_delay = 2
+    local game = start(world)
+    game.click_fuse()
+    game.manual_fuse_items(copies[3], copies[4])
+    game.run_timers()
+    check('auto fuse: a fusion by hand of copies of the pending pair is no error', game.errors() == '', game.errors())
+    check('auto fuse: after a fusion by hand of copies every item is fused once',
+        item_keys(world) == 'new_2' and fusions(world) == 'k+k manual_new+new_1', item_keys(world) .. ', ' .. fusions(world))
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') })
+    world.no_local_faction = true
+    local game = start(world)
+    game.polls[1]()
+    local button = world.pool_header:Find('af_tweaker_auto_fuse_button')
+    check('without a local faction the fuse button is inactive',
+        button ~= nil and button:CurrentState() == 'inactive', button and button:CurrentState())
+    game.fuse()
+    check('without a local faction a click fuses nothing and fails nothing',
+        #game.commands == 0 and game.errors() == '', game.errors())
 end
 
 do

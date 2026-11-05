@@ -266,6 +266,17 @@ What the script does:
   hand with the vanilla Fuse button during the run: it's logged and only lowers the number of
   items the pending fusion waits for. A fusion without its event within `fuse_confirm_rounds`
   rounds stops the run with an error.
+- The keys of the records (`AncillaryRecordContext.Key`, through `tostring`) are compared with
+  the keys of the event, and that equality isn't confirmed in the game. So when the first
+  fusion of a session times out while events with other keys came, the script takes one of
+  them for it, writes the keys of both to the errors file, and sets `fuse_event_keys_match` to
+  false: from then on any event of the faction confirms the pending fusion, as in 0.7.0. The
+  first matching event sets it to true, and then a timeout is an error again. A mismatch costs
+  `fuse_confirm_rounds` rounds once per session.
+- A hand fusion of copies of the pending pair has the same keys and is taken for it. The event
+  of the pending pair then counts as another fusion, so the numbers of items stay right. The next
+  round may pick the pair still on its way again; its second command finds the items gone and,
+  as the model of the tests assumes, does nothing.
 - The new item comes from the vanilla listener of the event, later than the event itself, so
   the next round reads the list only when it has `item_number - 1 - other_fusions` items, for
   at most `fuse_confirm_rounds` more rounds: a new item that came later would otherwise be taken
@@ -286,7 +297,9 @@ The button:
   px and centered.
 - It's added and refreshed by the same UI poll as the stars, so it's never kept between polls.
   With `auto_fuse_enabled` off it's hidden and clicks are ignored. The poll also sets its state:
-  `inactive` during a run and outside the local player's turn, `active` otherwise.
+  `inactive` during a run and outside the local player's turn, `active` otherwise. Without a
+  local faction (`cm:get_local_faction_name(true)` gives false) it's inactive, and a click only
+  logs it, instead of an error on every poll.
 - The sort direction button of the pool stays as it is: the header had room for a new button.
 
 ## Settings
@@ -398,7 +411,8 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto fuse button: to the right of the title, not covering it         | Works in 0.7.0, seen by the user |
 | Auto fuse button: inactive during a run                              | **Not confirmed yet**: a run of 8 pairs takes about 5 s |
 | Auto fuse button: inactive outside the player's turn (0.8.0)         | **Not confirmed yet**          |
-| Auto fuse: `first_ancillary_key()` of the event equals `AncillaryRecordContext.Key` (0.8.0) | **Not confirmed yet**: the keys of the vanilla log look like ancillary keys, but a mismatch would stop every run with "the game did not fuse" |
+| Auto fuse: `first_ancillary_key()` of the event equals `AncillaryRecordContext.Key` (0.8.0) | **Not confirmed yet**: the keys of the vanilla log look like ancillary keys. Since 0.8.1 a mismatch doesn't stop the runs: the errors file gets "are not the keys of" once per session, and the first pair takes about 3 s |
+| Auto fuse: a second command for a pair already fused does nothing (0.8.1) | **Not confirmed yet**: only after a hand fusion of copies of the pending pair |
 | Auto fuse: `FrameState != "..."` inside the query of the free items (0.8.0) | **Not confirmed yet**: the same `!=` as the categories |
 | Auto fuse: `auto_fuse_uncommon` off keeps the uncommon items (0.8.0) | **Not confirmed yet**          |
 
@@ -418,7 +432,8 @@ them after changing the script, and extend them with the change.
 
 - `model_test.lua` runs the script against a small model of the game, UI included: rounds,
   refused points, the choice of an upgrade, the order of fusions, late new items, fusions by
-  hand during a run, items that stay, the buttons, multiplayer, work without MCT. Its filter of
+  hand during a run (of copies of the pending pair too), event keys that differ from the
+  records, items that stay, the buttons, no local faction, multiplayer, work without MCT. Its filter of
   the free items checks each part of the query on its own, so a part dropped from the script
   fails a test. It also
   checks the MCT file against the defaults and the version of the script. It needs any Lua 5.4.
