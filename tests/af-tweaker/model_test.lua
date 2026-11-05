@@ -37,9 +37,12 @@ end
 -- world.upgrades is a key or a list of keys per level, world.chains the chains of the keys.
 -- The character is the world itself, or several are in world.heroes: { { cqi, points, skills, wounded } }.
 -- level_up_points of a character come with its next charged point.
--- world.items are the magic items of the faction: { key, level, category, equipped, refuse }.
+-- world.items are the magic items of the faction: { key, level, category, equipped, refuse, fusable,
+-- destroyable, hidden }, the last three true unless they're false.
 -- The game fuses a pair world.fuse_delay rounds after the command, never with world.refuse_fusions,
--- and the new item comes world.new_item_delay rounds after the event.
+-- and the new item comes world.new_item_delays[n] (or world.new_item_delay) rounds after the event
+-- of the n-th fusion. With world.keep_items the game sends the event and adds the new item, but the
+-- pair stays. world.frame_state_reads counts the reads of FrameState by item key.
 local function start(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -73,6 +76,7 @@ local function start(world)
         env.get_mct = function()
             return {
                 get_mod_by_key = function()
+                    if world.mct_error then error('MCT is broken') end
                     return {
                         get_option_by_key = function(_, key)
                             return { get_finalized_setting = function() return overrides[key] end }
@@ -152,23 +156,42 @@ local function start(world)
 
     world.items = world.items or {}
     world.fusions = {}
+    world.frame_state_reads = {}
     local pending_fusions = {}
     local pending_items = {}
     local next_level = { common = 'uncommon', uncommon = 'rare', rare = 'legendary' }
+
+    -- The filter of the free items: each part of the expression is checked on its own, so a part
+    -- the script drops lets such items through
+    local function is_free_item(expr, item)
+        local function holds(part, value) return not expr:find(part, 1, true) or value end
+        local result = holds('.CharacterEquippedToContext) == false', not item.equipped)
+            and holds('.IsFusable', item.fusable ~= false)
+            and holds('.CanBeDestroyed', item.destroyable ~= false)
+            and holds('.IsHidden == false', not item.hidden)
+            and holds('.Category != "general"', item.category ~= 'general')
+            and holds('.Category != "mount"', item.category ~= 'mount')
+        for level in expr:gmatch('%.FrameState != "(%w+)"') do
+            result = result and item.level ~= level
+        end
+        return result
+    end
 
     local function item_value(expr)
         local items = world.items
         local item = items[tonumber(expr:match('At%((%d+)%)')) + 1]
         if expr:find('^IsContextValid%(AncillaryList%.At%(%d+%)%.CharacterEquippedToContext%) == false && ') then
-            assert(expr:find('IsFusable', 1, true) and expr:find('CanBeDestroyed', 1, true), expr)
-            return not item.equipped and item.category ~= 'general' and item.category ~= 'mount'
+            return is_free_item(expr, item)
         end
         local other = expr:match('%.CanFuse%(AncillaryList%.At%((%d+)%)%)$')
         if other then
             local second = items[tonumber(other) + 1]
             return item.level == second.level and not item.refuse and not second.refuse
         end
-        if expr:find('%.AncillaryRecordContext%.FrameState$') then return item.level end
+        if expr:find('%.AncillaryRecordContext%.FrameState$') then
+            world.frame_state_reads[item.key] = (world.frame_state_reads[item.key] or 0) + 1
+            return item.level
+        end
         if expr:find('%.CategoryContext%.Category$') then return item.category end
         if expr:find('%.AncillaryRecordContext%.Key$') then return item.key end
         if expr:find('%.Name$') then return item.key .. ' name' end
@@ -182,6 +205,16 @@ local function start(world)
                 return
             end
         end
+    end
+
+    local function fire_fused(faction_name, first_key, second_key)
+        local context = {
+            faction = function() return { name = function() return faction_name end } end,
+            first_ancillary_key = function() return first_key end,
+            second_ancillary_key = function() return second_key end
+        }
+        local listener = listeners.AfTweakerAncillariesFused
+        if listener.cond(context) then listener.handler(context) end
     end
 
     -- Like the game and the vanilla listener of AncillariesFused
@@ -200,18 +233,19 @@ local function start(world)
             local fusion = pending_fusions[i]
             if fusion.rounds == 0 then
                 table.remove(pending_fusions, i)
-                remove_item(fusion.first)
-                remove_item(fusion.second)
+                if not world.keep_items then
+                    remove_item(fusion.first)
+                    remove_item(fusion.second)
+                end
                 table.insert(world.fusions, fusion.first.key .. '+' .. fusion.second.key)
-                local context = { faction = function() return faction end }
-                local listener = listeners.AfTweakerAncillariesFused
-                if listener.cond(context) then listener.handler(context) end
+                fire_fused('player', fusion.first.key, fusion.second.key)
                 local item = {
                     key = 'new_' .. #world.fusions,
                     level = next_level[fusion.first.level],
                     category = fusion.first.category
                 }
-                local delay = world.new_item_delay or 0
+                local delay = world.new_item_delays and world.new_item_delays[#world.fusions]
+                    or world.new_item_delay or 0
                 if delay == 0 then
                     table.insert(world.items, item)
                 else
@@ -393,6 +427,21 @@ local function start(world)
         game.click_fuse()
         game.run_timers()
     end
+
+    -- The player fuses two items by hand with the Fuse button of the game
+    function game.manual_fuse(first_key, second_key)
+        local pair = {}
+        for _, data in ipairs(world.items) do
+            if data.key == first_key or data.key == second_key then table.insert(pair, data) end
+        end
+        assert(#pair == 2, 'manual fuse: ' .. first_key .. ' + ' .. second_key)
+        remove_item(pair[1])
+        remove_item(pair[2])
+        fire_fused('player', first_key, second_key)
+        table.insert(world.items, { key = 'manual_new', level = next_level[pair[1].level], category = pair[1].category })
+    end
+
+    game.fire_fused = fire_fused
 
     function game.log() return read_file(log_name) end
     function game.errors() return read_file(err_name) end
@@ -1254,6 +1303,106 @@ do
     game.polls[1]()
     check('the option on shows the fuse button again', button.visible)
     check('the fuse button: no errors', game.errors() == '', game.errors())
+
+    world.turn_over = true
+    game.polls[1]()
+    check('the fuse button is inactive outside the turn of the player', button:CurrentState() == 'inactive', button:CurrentState())
+    world.turn_over = false
+    game.polls[1]()
+    check('the fuse button is active again in the turn of the player', button:CurrentState() == 'active', button:CurrentState())
+
+    -- The end of the run logs through MCT, and an error there must not keep the run going
+    world.items = { item('c5', 'common'), item('c6', 'common') }
+    game.click_fuse()
+    world.mct_error = true
+    game.run_timers()
+    world.mct_error = false
+    game.polls[1]()
+    check('an error at the end of a run is logged', game.errors():find('run_fuse_round, on_done: ', 1, true) ~= nil, game.errors())
+    check('an error at the end of a run leaves the button active', button:CurrentState() == 'active', button:CurrentState())
+end
+
+do
+    -- The first new item comes two rounds after its event, the next ones at once
+    local world = fuse_world({
+        item('c1', 'common'), item('c2', 'common'), item('c3', 'common'),
+        item('c4', 'common'), item('c5', 'common'), item('c6', 'common')
+    })
+    world.new_item_delays = { 2 }
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: a late new item is waited for', fusions(world) == 'c1+c2 c3+c4 c5+c6 new_1+new_2', fusions(world))
+    check('auto fuse: a late new item is no error', game.errors() == '', game.errors())
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') })
+    world.keep_items = true
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: items that stay stop the run',
+        #game.commands == 1 and game.errors():find('the items are still there after common: c1 name (c1) + c2 name (c2)', 1, true) ~= nil,
+        game.errors())
+    world.keep_items = false
+    game.fuse()
+    check('auto fuse: a new click works after items that stayed',
+        #game.commands > 1 and count(game.errors(), 'still there') == 1 and world.items[1].key == 'new_3', game.errors())
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') })
+    world.refuse_fusions = true
+    local game = start(world)
+    game.click_fuse()
+    game.fire_fused('other', 'c1', 'c2')
+    game.run_timers()
+    check('auto fuse: the event of another faction is not taken',
+        game.errors():find('did not fuse common', 1, true) ~= nil, game.errors())
+end
+
+do
+    local world = fuse_world({
+        item('c1', 'common'), item('c2', 'common'),
+        item('a1', 'common', 'armour'), item('a2', 'common', 'armour')
+    })
+    world.fuse_delay = 2
+    local game = start(world)
+    game.click_fuse()
+    game.manual_fuse('a1', 'a2')
+    game.run_timers()
+    check('auto fuse: a fusion by hand during the run is not taken for the pending one',
+        fusions(world) == 'c1+c2' and game.errors() == '', fusions(world) .. ' ' .. game.errors())
+    check('auto fuse: a fusion by hand is logged', game.log():find('another fusion during the run, a1 + a2', 1, true) ~= nil, game.log())
+    check('auto fuse: the items of both fusions are left', item_keys(world) == 'manual_new new_1', item_keys(world))
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common'), item('u1', 'uncommon') },
+        { auto_fuse_enabled = true, auto_fuse_uncommon = false })
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: uncommon items are kept with the option off', fusions(world) == 'c1+c2', fusions(world))
+    check('auto fuse: the log of a run without uncommon items', game.log():find('auto fuse done, common pairs: 1\n', 1, true) ~= nil, game.log())
+end
+
+do
+    local world = fuse_world({
+        item('c1', 'common', 'weapon', { fusable = false }),
+        item('c2', 'common', 'weapon', { destroyable = false }),
+        item('c3', 'common', 'weapon', { hidden = true }),
+        item('c4', 'common'),
+        item('c5', 'common'),
+        item('r1', 'rare'),
+        item('l1', 'legendary'),
+        item('x1', 'crafted')
+    })
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: items that are not fusable, not destroyable or of a hidden category are kept',
+        fusions(world) == 'c4+c5', fusions(world))
+    check('auto fuse: the level of a rare, unique or crafted item is never read',
+        world.frame_state_reads.r1 == nil and world.frame_state_reads.l1 == nil and world.frame_state_reads.x1 == nil,
+        tostring(world.frame_state_reads.r1))
 end
 
 -- Settings: the MCT file against the defaults of the script

@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '0.7.0'
+local mod_version = '0.8.0'
 
 local mct_mod = get_mct():register_mod("af_tweaker")
 
@@ -48,9 +48,15 @@ mct_mod:add_new_section("auto_fuse", "Magic items")
 
 local auto_fuse = mct_mod:add_new_option("auto_fuse_enabled", "checkbox")
 auto_fuse:set_text("Auto fuse button in the global pool")
-auto_fuse:set_tooltip_text("A button in the header of the global pool of magic items fuses unequipped items in pairs of the same rarity and category: common ones first, then uncommon ones, the new items included. Rare and unique items are kept.")
+auto_fuse:set_tooltip_text("A button in the header of the global pool of magic items fuses unequipped items in pairs of the same rarity and category: common ones first, then uncommon ones, the new items included. Rare and unique items are kept. A fusion can't be undone.")
 auto_fuse:set_default_value(true)
 auto_fuse:set_is_global(true)
+
+local auto_fuse_uncommon = mct_mod:add_new_option("auto_fuse_uncommon", "checkbox")
+auto_fuse_uncommon:set_text("Fuse uncommon items too")
+auto_fuse_uncommon:set_tooltip_text("On: after the common items the button fuses the uncommon ones into rare items, the ones you had before included. Off: it fuses only common items, and all uncommon ones are kept, the new ones too.")
+auto_fuse_uncommon:set_default_value(true)
+auto_fuse_uncommon:set_is_global(true)
 
 mct_mod:add_new_section("debug", "Debug")
 

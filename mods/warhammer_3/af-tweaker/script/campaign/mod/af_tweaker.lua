@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.7.0'
+local mod_version = '0.8.0'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -12,6 +12,7 @@ local settings = {
     favorite_buildings_enabled = true,
     auto_skills_enabled = true,
     auto_fuse_enabled = true,
+    auto_fuse_uncommon = true,
     min_treasury = 5000,
     turn_start_delay = 0.5,
     round_delay = 0.5,
@@ -47,9 +48,12 @@ local fuse_button_name = 'af_tweaker_auto_fuse_button'
 local fuse_button_template = 'ui/templates/round_extra_small_button'
 local fuse_button_image = 'ui/skins/default/af_tweaker_auto_fuse.png'
 
--- The rarities that are fused, the lowest first, as FrameState of an item names them: the ui_state
--- of its row in ancillary_uniqueness_groupings. Rare, unique and crafted items are never fused.
-local fuse_levels = { 'common', 'uncommon' }
+-- The rarities as FrameState of an item names them: the ui_state of its row in
+-- ancillary_uniqueness_groupings. The fused ones go the lowest first; rare, unique (legendary) and
+-- crafted items are never fused, and uncommon ones only with auto_fuse_uncommon.
+local all_fuse_levels = { 'common', 'uncommon' }
+local common_fuse_levels = { 'common' }
+local never_fused_levels = { 'rare', 'legendary', 'crafted' }
 
 -- In the order of adding: { key, priority }
 local favorites = {}
@@ -132,7 +136,12 @@ local function run_rounds(name, round, on_done, on_error)
             run_rounds(name, round, on_done, on_error)
         end, settings.round_delay)
     else
-        on_done()
+        -- From a callback an error would be lost, and the state the callback resets would stay
+        local is_done_ok, error_text = pcall(on_done)
+
+        if not is_done_ok then
+            log_errors(name .. ', on_done: ' .. tostring(error_text))
+        end
     end
 end
 
@@ -952,34 +961,41 @@ local function item_expression(item_index)
     return 'AncillaryList.At(' .. item_index .. ')'
 end
 
--- The items of the Magic Items tab of the global pool that no character has equipped.
--- CanBeDestroyed is what the game checks before it lets the player tick an item there.
-local function is_free_magic_item(faction_cqi, item_index)
+-- The items of the Magic Items tab of the global pool that no character has equipped, of the levels
+-- a run may fuse. CanBeDestroyed is what the game checks before it lets the player tick an item
+-- there. The kept levels are ruled out in the same query with `!=`, like the categories, so the
+-- level and the category of a rare item are never read.
+local function is_free_magic_item(run, item_index)
     local item = item_expression(item_index)
     local record = item .. '.AncillaryRecordContext'
     local category = record .. '.CategoryContext'
-
-    return get_faction_value(faction_cqi, 'IsContextValid(' .. item .. '.CharacterEquippedToContext) == false'
+    local expression = 'IsContextValid(' .. item .. '.CharacterEquippedToContext) == false'
         .. ' && ' .. item .. '.IsFusable'
         .. ' && ' .. record .. '.CanBeDestroyed'
         .. ' && ' .. category .. '.IsHidden == false'
         .. ' && ' .. category .. '.Category != "general"'
         .. ' && ' .. category .. '.Category != "mount"'
-    )
+
+    for _, level in ipairs(run.kept_levels) do
+        expression = expression .. ' && ' .. record .. '.FrameState != "' .. level .. '"'
+    end
+
+    return get_faction_value(run.faction_cqi, expression)
 end
 
 -- Free items of the fused levels by level and category, in the order of the list
-local function get_fuse_candidates(faction_cqi)
+local function get_fuse_candidates(run)
+    local faction_cqi = run.faction_cqi
     local candidates = {}
 
-    for _, level in ipairs(fuse_levels) do
+    for _, level in ipairs(run.levels) do
         candidates[level] = { categories = {}, items = {} }
     end
 
     local item_number = get_faction_value(faction_cqi, 'AncillaryList.Size') or 0
 
     for item_index = 0, item_number - 1 do
-        if is_free_magic_item(faction_cqi, item_index) then
+        if is_free_magic_item(run, item_index) then
             local record = item_expression(item_index) .. '.AncillaryRecordContext'
             local level = get_faction_value(faction_cqi, record .. '.FrameState')
             local by_level = level and candidates[level]
@@ -1003,9 +1019,11 @@ local function get_fuse_candidates(faction_cqi)
 end
 
 -- Two items of the same level and category that the game lets fuse, the lowest level first:
--- the items made from it are fused at the next level only after it.
-local function find_fuse_pair(faction_cqi, candidates)
-    for _, level in ipairs(fuse_levels) do
+-- the items made from it are fused at the next level only after it. The script's own filters
+-- leave CanFuse nothing to refuse in the vanilla game, so a refused pair is simply tried again
+-- in the next round rather than remembered.
+local function find_fuse_pair(faction_cqi, levels, candidates)
+    for _, level in ipairs(levels) do
         local by_level = candidates[level]
 
         for _, category in ipairs(by_level.categories) do
@@ -1028,13 +1046,13 @@ local function find_fuse_pair(faction_cqi, candidates)
     return nil
 end
 
-local function item_title(faction_cqi, item_index)
-    local item = item_expression(item_index)
+-- The key of the record, as AncillariesFused gives the keys of the fused items
+local function get_item_key(faction_cqi, item_index)
+    return tostring(get_faction_value(faction_cqi, item_expression(item_index) .. '.AncillaryRecordContext.Key'))
+end
 
-    return with_name(
-        get_faction_value(faction_cqi, item .. '.Name'),
-        tostring(get_faction_value(faction_cqi, item .. '.AncillaryRecordContext.Key'))
-    )
+local function item_title(faction_cqi, item_index, key)
+    return with_name(get_faction_value(faction_cqi, item_expression(item_index) .. '.Name'), key)
 end
 
 -- Returns true if the next round can go on: the last fusion is done, or there was none
@@ -1055,10 +1073,14 @@ local function check_last_fusion(run)
     end
 
     local item_number = get_faction_value(run.faction_cqi, 'AncillaryList.Size') or 0
+    -- Each fusion takes two items and its event adds one, the fusions of the player during the run too
+    local expected_number = pending.item_number - 1 - pending.other_fusions
 
-    -- The new item comes from a vanilla listener of the same event, it gets one more round
-    if item_number ~= pending.expected_number and not pending.is_settled then
-        pending.is_settled = true
+    -- The new item comes from a vanilla listener of the event, later than the event itself, and
+    -- the next round must not count it as the item of its own fusion. A fusion that gives no item
+    -- goes on after the wait.
+    if item_number ~= expected_number and pending.rounds_settling < settings.fuse_confirm_rounds then
+        pending.rounds_settling = pending.rounds_settling + 1
         return false
     end
 
@@ -1086,23 +1108,28 @@ local function run_fuse_round(run)
         return true
     end
 
-    local candidates, item_number = get_fuse_candidates(run.faction_cqi)
-    local first, second, level = find_fuse_pair(run.faction_cqi, candidates)
+    local candidates, item_number = get_fuse_candidates(run)
+    local first, second, level = find_fuse_pair(run.faction_cqi, run.levels, candidates)
 
     if not first then
         return false
     end
 
-    local title = level .. ': ' .. item_title(run.faction_cqi, first) .. ' + ' .. item_title(run.faction_cqi, second)
+    local first_key = get_item_key(run.faction_cqi, first)
+    local second_key = get_item_key(run.faction_cqi, second)
+    local title = level .. ': ' .. item_title(run.faction_cqi, first, first_key)
+        .. ' + ' .. item_title(run.faction_cqi, second, second_key)
 
     -- Before the command: the game may send the event while it runs
     run.pending = {
         title = title,
+        first_key = first_key,
+        second_key = second_key,
         item_number = item_number,
-        expected_number = item_number - 1,
+        other_fusions = 0,
         rounds_waited = 0,
-        is_confirmed = false,
-        is_settled = false
+        rounds_settling = 0,
+        is_confirmed = false
     }
 
     common.call_context_command(faction_context, run.faction_cqi,
@@ -1115,8 +1142,26 @@ local function run_fuse_round(run)
     return true
 end
 
-local function on_ancillaries_fused()
-    fuse_run.pending.is_confirmed = true
+-- The event of the pending fusion, or of one the player makes by hand with the Fuse button of the
+-- game during the run: the keys of the items tell them apart. The other one only changes the
+-- number of items the pending fusion waits for.
+local function on_ancillaries_fused(context)
+    local pending = fuse_run.pending
+    local first_key = context:first_ancillary_key()
+    local second_key = context:second_ancillary_key()
+    local is_pending_pair = (first_key == pending.first_key and second_key == pending.second_key)
+        or (first_key == pending.second_key and second_key == pending.first_key)
+
+    if is_pending_pair and not pending.is_confirmed then
+        pending.is_confirmed = true
+    else
+        pending.other_fusions = pending.other_fusions + 1
+        log('auto fuse: another fusion during the run, ' .. tostring(first_key) .. ' + ' .. tostring(second_key))
+    end
+end
+
+local function is_local_players_turn()
+    return cm:get_faction(cm:get_local_faction_name(true)):is_factions_turn()
 end
 
 local function start_auto_fuse()
@@ -1132,10 +1177,21 @@ local function start_auto_fuse()
     local run = {
         faction_name = faction_name,
         faction_cqi = faction:command_queue_index(),
+        levels = common_fuse_levels,
+        kept_levels = { 'uncommon' },
         fused = {}
     }
 
-    for _, level in ipairs(fuse_levels) do
+    if get_setting('auto_fuse_uncommon') then
+        run.levels = all_fuse_levels
+        run.kept_levels = {}
+    end
+
+    for _, level in ipairs(never_fused_levels) do
+        table.insert(run.kept_levels, level)
+    end
+
+    for _, level in ipairs(run.levels) do
         run.fused[level] = 0
     end
 
@@ -1145,14 +1201,16 @@ local function start_auto_fuse()
     run_rounds('run_fuse_round', function()
         return run_fuse_round(run)
     end, function()
+        -- First: the button must not stay inactive whatever happens next
+        fuse_run = nil
+
         local parts = {}
 
-        for _, level in ipairs(fuse_levels) do
+        for _, level in ipairs(run.levels) do
             table.insert(parts, level .. ' pairs: ' .. run.fused[level])
         end
 
         log('auto fuse done, ' .. table.concat(parts, ', '))
-        fuse_run = nil
     end, function()
         fuse_run = nil
     end)
@@ -1464,20 +1522,22 @@ local function refresh_fuse_button()
         button:SetDockingPoint(6)
         button:SetDockOffset(-6, 0)
         button:SetTooltipText('Auto fuse: unequipped magic items are fused in pairs of the same rarity and category,'
-            .. ' common ones first, then uncommon ones, the new items included. Rare and unique items are kept.'
-            .. ' Works in your turn.', '', true)
+            .. ' common ones first, then uncommon ones unless the settings keep them, the new items included.'
+            .. ' Rare and unique items are kept. It can\'t be undone. Works in your turn.', '', true)
     end
 
     if not button:Visible() then
         button:SetVisible(true)
     end
 
-    -- Inactive while a run goes. The game changes the other states by itself on hovers and clicks.
+    -- Inactive while a run goes and outside the player's turn, like the item checkboxes of the
+    -- pool. The game changes the other states by itself on hovers and clicks.
     local is_inactive = button:CurrentState() == 'inactive'
+    local can_start = not fuse_run and is_local_players_turn()
 
-    if fuse_run and not is_inactive then
+    if not can_start and not is_inactive then
         button:SetState('inactive')
-    elseif not fuse_run and is_inactive then
+    elseif can_start and is_inactive then
         button:SetState('active')
     end
 end

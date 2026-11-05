@@ -91,7 +91,9 @@ local function install_model(world)
             local items = world.items
             if expr == 'AncillaryList.Size' then return #items end
             local data = items[tonumber(string.match(expr, 'At%((%d+)%)')) + 1]
-            if has(expr, '^IsContextValid%(AncillaryList') then return not data.equipped end
+            if has(expr, '^IsContextValid%(AncillaryList') then
+                return not data.equipped and not has_plain(expr, '.FrameState != "' .. data.level .. '"')
+            end
             local other = string.match(expr, '%.CanFuse%(AncillaryList%.At%((%d+)%)%)$')
             if other then return data.level == items[tonumber(other) + 1].level end
             if has(expr, '%.FrameState$') then return data.level end
@@ -139,7 +141,9 @@ local function install_model(world)
                     end
                 end
                 world.fused = (world.fused or 0) + 1
-                rpfm.fire("AncillariesFused", { faction = player })
+                rpfm.fire("AncillariesFused", {
+                    faction = player, first_ancillary_key = pair[1].key, second_ancillary_key = pair[2].key
+                })
                 table.insert(world.items, { key = 'new' .. world.fused, level = pair[1].level == 'common' and 'uncommon' or 'rare' })
             end, 0.1)
         elseif context == 'CcoCampaignCharacter' then
@@ -231,6 +235,7 @@ rpfm.test("auto fuse", function()
     OVERRIDES.favorite_buildings_enabled = false
     OVERRIDES.auto_skills_enabled = false
     OVERRIDES.auto_fuse_enabled = true
+    OVERRIDES.auto_fuse_uncommon = true
     local world = {
         levels = {}, upgrades = {}, slots = {}, skills = {},
         items = {
@@ -244,6 +249,25 @@ rpfm.test("auto fuse", function()
     report('fuse')
     rpfm.assert_equal(world.fused, 2)
     rpfm.assert_equal(has_plain(log_text(), 'common pairs: 1, uncommon pairs: 1'), true)
+    rpfm.assert_equal(errors_text(), '')
+end)
+
+rpfm.test("auto fuse keeps uncommon items", function()
+    OVERRIDES.auto_upgrade_enabled = false
+    OVERRIDES.favorite_buildings_enabled = false
+    OVERRIDES.auto_skills_enabled = false
+    OVERRIDES.auto_fuse_enabled = true
+    OVERRIDES.auto_fuse_uncommon = false
+    local world = {
+        levels = {}, upgrades = {}, slots = {}, skills = {},
+        items = { { key = 'u1', level = 'uncommon' }, { key = 'c1', level = 'common' }, { key = 'c2', level = 'common' } }
+    }
+    install_model(world)
+    rpfm.fire("ComponentLClickUp", { string = 'af_tweaker_auto_fuse_button' })
+    pump(60)
+    report('fuse uncommon off')
+    rpfm.assert_equal(world.fused, 1)
+    rpfm.assert_equal(has_plain(log_text(), 'auto fuse done, common pairs: 1'), true)
     rpfm.assert_equal(errors_text(), '')
 end)
 

@@ -220,7 +220,10 @@ On by default. A button in the header of the global pool of the character panel 
 player's unequipped magic items in pairs, one pair per round (`round_delay`), only in the
 player's turn. Each round reads the list anew and fuses the first pair of the lowest level, so
 all common pairs go before the uncommon ones, and the uncommon items made from commons are
-fused too. Nothing above uncommon is fused.
+fused too. Nothing above uncommon is fused, and uncommon items only with `auto_fuse_uncommon`
+(on by default): with it off a run fuses common items only and keeps every uncommon one, the
+new ones included. A fusion can't be undone and the button asks nothing, so that option is the
+player's way to keep the uncommon items they already have.
 
 How the game fuses, read from the vanilla files on 2026-11-05:
 - The Fuse button of `ui/campaign ui/character_details_panel_details.twui.xml` (`ui3.pack`)
@@ -231,7 +234,11 @@ How the game fuses, read from the vanilla files on 2026-11-05:
 - The game then sends the script event `AncillariesFused`, and the vanilla listener of
   `script/campaign/wh3_campaign_item_fusing.lua` adds a random item of the next rarity and the
   same category with `cm:add_ancillary_to_faction`. Commons give uncommons, uncommons give
-  rares, rares give a unique by chance or scrap.
+  rares, rares give a unique by chance or scrap. The event has `faction()`,
+  `first_ancillary_key()`, `second_ancillary_key()`, `ancillary_category_key()` and
+  `ancillary_uniqueness_group_key()`; the keys are the ancillary keys, like
+  `wh_main_anc_armour_charmed_shield` (the vanilla listener writes them to the game's script
+  log).
 
 What the script does:
 - The items are `AncillaryList` of `CcoCampaignFaction`, whose id is the faction cqi, the same
@@ -240,22 +247,34 @@ What the script does:
   checkbox of the UI is ticked. Indices are read and used in the same round, while the list
   can't change.
 - An item takes part when `IsContextValid(CharacterEquippedToContext) == false`, the same check
-  as the vanilla "Only show unequipped items" filter, plus `IsFusable`, `CanBeDestroyed` and the
-  category filter of the Magic Items tab (`IsHidden == false`, not `general`, not `mount`).
+  as the vanilla "Only show unequipped items" filter, plus `IsFusable`, `CanBeDestroyed`, the
+  category filter of the Magic Items tab (`IsHidden == false`, not `general`, not `mount`) and
+  `FrameState != "..."` for each level the run keeps. All of it is one query per item, so the
+  level and the category of a kept item are never read: a late game pool holds many rares.
 - The level is `AncillaryRecordContext.FrameState`: the `ui_state` of the item's row in
   `ancillary_uniqueness_groupings` (`common` 35-50, `uncommon` 80-100, `rare` 130-150,
   `legendary` for unique and unique fusable, `crafted` for scrap, runes and crafted items), the
   states of the vanilla item frame. Only `common` and `uncommon` are fused, so the Necronium
-  grimoire and tome (legendary) and the scrap of failed fusions (crafted) are never taken.
+  grimoire and tome (legendary) and the scrap of failed fusions (crafted) are never taken. A
+  state that isn't on any list passes the query but has no bucket, so it's skipped too.
 - The category is `CategoryContext.Category`. Two items must have the same level and category,
-  and `CanFuse` must agree; a pair it refuses is skipped, and the next pair is tried.
-- A fusion counts as done when `AncillariesFused` comes for the player's faction. The new item
-  comes from the vanilla listener of the same event, so the next round reads the list only
-  when it has one item less than before the fusion, or after one more round. A fusion without
-  the event within `fuse_confirm_rounds` rounds stops the run with an error, and so does a list
-  that didn't get shorter: each round must take items, or the rounds might never end.
-- The run stops when the turn is over. The button is inactive while a run goes, and a click
-  during a run is ignored.
+  and `CanFuse` must agree; a pair it refuses is skipped, and the next pair is tried. After the
+  script's own filters the vanilla `CanFuse` has nothing left to refuse, so refused pairs aren't
+  remembered between rounds.
+- A fusion counts as done when `AncillariesFused` comes for the player's faction with the keys
+  of the pending pair, in any order. An event with other keys is a fusion the player made by
+  hand with the vanilla Fuse button during the run: it's logged and only lowers the number of
+  items the pending fusion waits for. A fusion without its event within `fuse_confirm_rounds`
+  rounds stops the run with an error.
+- The new item comes from the vanilla listener of the event, later than the event itself, so
+  the next round reads the list only when it has `item_number - 1 - other_fusions` items, for
+  at most `fuse_confirm_rounds` more rounds: a new item that came later would otherwise be taken
+  for the item of the next fusion. After the wait a list that didn't get shorter stops the run
+  with an error: each round must take items, or the rounds might never end.
+- The run stops when the turn is over. The button is inactive while a run goes and outside the
+  player's turn, and a click then is ignored.
+- `run_rounds` calls the end of a run in `pcall` too, and the end of the auto fuse resets
+  `fuse_run` before anything else, so an error there can't leave the button inactive.
 
 The button:
 - `ui/templates/round_extra_small_button`, 30x30, in `global_pool > header`, docked to the
@@ -266,7 +285,8 @@ The button:
   template, with the glyph of the vanilla `icon_merge.png` (the merging of units) scaled to 24
   px and centered.
 - It's added and refreshed by the same UI poll as the stars, so it's never kept between polls.
-  With `auto_fuse_enabled` off it's hidden and clicks are ignored.
+  With `auto_fuse_enabled` off it's hidden and clicks are ignored. The poll also sets its state:
+  `inactive` during a run and outside the local player's turn, `active` otherwise.
 - The sort direction button of the pool stays as it is: the header had room for a new button.
 
 ## Settings
@@ -283,6 +303,7 @@ defaults from the `settings` table in the script.
 | `favorite_buildings_enabled` | checkbox | `true` | Builds favorite buildings; the list itself comes from the star button |
 | `auto_skills_enabled`  | checkbox | `true`  | Spends skill points and shows the priority buttons |
 | `auto_fuse_enabled`    | checkbox | `true`  | Shows the auto fuse button of the global pool |
+| `auto_fuse_uncommon`   | checkbox | `true`  | The button fuses uncommon items after the common ones |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -376,6 +397,10 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Auto fuse: no pair of the same rarity and category is left           | Works in 0.7.0: the pool after the run, seen by the user, has one free item per common or uncommon category |
 | Auto fuse button: to the right of the title, not covering it         | Works in 0.7.0, seen by the user |
 | Auto fuse button: inactive during a run                              | **Not confirmed yet**: a run of 8 pairs takes about 5 s |
+| Auto fuse button: inactive outside the player's turn (0.8.0)         | **Not confirmed yet**          |
+| Auto fuse: `first_ancillary_key()` of the event equals `AncillaryRecordContext.Key` (0.8.0) | **Not confirmed yet**: the keys of the vanilla log look like ancillary keys, but a mismatch would stop every run with "the game did not fuse" |
+| Auto fuse: `FrameState != "..."` inside the query of the free items (0.8.0) | **Not confirmed yet**: the same `!=` as the categories |
+| Auto fuse: `auto_fuse_uncommon` off keeps the uncommon items (0.8.0) | **Not confirmed yet**          |
 
 Next in-game check: click the star of a building through all four icons and look at the file;
 with a small budget, check in the log that three stars are built before one star; compare the
@@ -392,8 +417,10 @@ answers still needs a run in the game: see [Verification status](#verification-s
 them after changing the script, and extend them with the change.
 
 - `model_test.lua` runs the script against a small model of the game, UI included: rounds,
-  refused points, the choice of an upgrade, the order of fusions, the buttons, multiplayer, work
-  without MCT. It also
+  refused points, the choice of an upgrade, the order of fusions, late new items, fusions by
+  hand during a run, items that stay, the buttons, multiplayer, work without MCT. Its filter of
+  the free items checks each part of the query on its own, so a part dropped from the script
+  fails a test. It also
   checks the MCT file against the defaults and the version of the script. It needs any Lua 5.4.
   The one inside the VS Code Lua extension will do. Run it from the repository root, it prints
   `ALL PASSED` at the end:

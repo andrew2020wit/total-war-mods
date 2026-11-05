@@ -36,10 +36,11 @@ The version of the mod is shown in its title.
 | Build favorite buildings at the start of the turn | On | Builds your favorite buildings |
 | Spend skill points at the start of the turn | On | Spends skill points and shows the priority stars |
 | Auto fuse button in the global pool | On | Shows the button that fuses magic items |
+| Fuse uncommon items too | On | The button fuses uncommon items after the common ones |
 | Write a log file | Off | Writes a log, useful for finding problems |
 
 The settings are the same for all your campaigns. A change takes effect from your next turn,
-except for the priority stars and the auto fuse button, which appear or go away right away.
+except for the priority stars and the auto fuse settings, which apply right away.
 
 ## Minimum treasury
 
@@ -70,7 +71,7 @@ goes for several copies of a favorite building, as the game may limit how many y
 
 ## Favorite buildings
 
-![The star button of a building](../imgs/tweaker/favorite.png)
+![The star button of a building](../imgs/tweaker/favorite2.png)
 
 Buildings with stars are built automatically in free building slots. The mod never builds a new
 building without stars, but automatic upgrades still apply to the ones you built yourself.
@@ -84,6 +85,8 @@ the demolish button:
 | One gold star | 1 |
 | Two gold stars | 2 |
 | Three gold stars | 3 |
+
+![A building chain with three stars](../imgs/tweaker/favorite-stars.png)
 
 A fourth click clears the priority. Free slots in all your settlements get the buildings with
 three stars first, then those with two stars, then those with one.
@@ -149,8 +152,11 @@ you over and over:
 1. It takes two **unequipped** common items of the same category, such as two weapons or two
    armours, and fuses them.
 2. It repeats this one pair at a time while such pairs are left.
-3. Then it does the same with the uncommon items, including the ones it has just made.
+3. Then it does the same with the uncommon items, including the ones it has just made, unless
+   you turned **Fuse uncommon items too** off in the settings.
 
+- All your unequipped uncommon items take part, not only the ones the button has made. To keep
+  them all, turn **Fuse uncommon items too** off: then the button fuses only common items.
 - Items that any of your characters has equipped are never fused, whether the
   **Only show unequipped items** box is ticked or not.
 - Rare, unique and crafted items are never fused, and neither are followers (the Ancillaries
@@ -159,10 +165,11 @@ you over and over:
   category and rarity stays as it is.
 - The game's own rules still apply: the mod fuses only the pairs that the Fuse button would
   accept.
-- It works only in your turn. Each pair takes about half a second, and the button is greyed out
-  until it's done.
-- A fusion can't be undone. If you want to keep a common or uncommon item, equip it on a
-  character first.
+- It works only in your turn. Each pair takes a bit less than a second, and clicks on the button
+  are ignored until it's done.
+- You can still fuse items by hand with the game's **Fuse** button while it works.
+- A fusion can't be undone, and the button doesn't ask before it starts. If you want to keep a
+  common or uncommon item, equip it on a character first.
 
 ## Compatibility with other mods
 

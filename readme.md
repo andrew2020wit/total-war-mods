@@ -51,7 +51,8 @@ The only thing which you can expect that this mod gradually increases difficulty
 
 Campaign mod that automates routine work at the start of your turn: it upgrades buildings, and
 builds your favorite buildings and spends skill points by the priorities you set.
-A button in the global pool of magic items fuses your unequipped common and uncommon items.
+A button in the global pool of magic items fuses your unequipped common and uncommon items, or
+only the common ones if you choose so.
 Each feature can be turned off, and it's compatible with other mods, including Radious.
 
 [User guide](./docs/af-tweaker-user-guide.md)
