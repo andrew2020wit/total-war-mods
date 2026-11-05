@@ -9,8 +9,9 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-Every AI faction gets them: alliances, vassals and wars change nothing. Rebels never get them,
-and you can turn them off for whole cultures in the settings.
+Every AI faction gets them: alliances, vassals and wars change nothing. Rebels never get them.
+In the settings you can turn them off for whole cultures, or make them smaller or bigger for a
+culture.
 
 ## Installation
 
@@ -37,17 +38,18 @@ The version of the mod is shown in its title.
 | Character experience | Experience per turn number | 200 | Multiplied by the turn number, 0-5000 |
 | Character experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
-| Unit experience | Every n-th turn | 1 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50 |
+| Unit experience | Every n-th turn | 2 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50. Divided by the bonus multiplier of the culture |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
 | Skip the bonuses for cultures | One checkbox for each culture | Off | The AI factions of this culture get no bonuses |
+| Bonus multiplier for cultures | One list for each culture | 1 | 0.25 to 2: makes the gold and the experience of this culture smaller or bigger |
 
-The settings are the same for all your campaigns, except the skipped cultures. A change takes
-effect from the next turn of an AI faction.
+The settings are the same for all your campaigns, except the skipped cultures and the bonus
+multipliers. A change takes effect from the next turn of an AI faction.
 
 ### Skipping cultures
 
-The last section lists the cultures of the game and its DLCs. It's long, so scroll the right
-column of the window to see all of it.
+The last two sections list the cultures of the game and its DLCs. They're long, so scroll the
+right column of the window to see all of them.
 
 Tick a culture and its AI factions stop getting all the bonuses. Your own culture is on the list
 too: by default the other factions of your culture get the bonuses like everybody else.
@@ -58,6 +60,25 @@ you add the mod to a running campaign, no culture is skipped until you tick it t
 
 Cultures from other mods aren't on the list, so they always get the bonuses.
 
+### Bonus multiplier for cultures
+
+Each culture has a multiplier: 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75 or 2. With the default 1 the
+culture gets the bonuses as they are. The multiplier changes:
+
+- the gold: multiplied by it;
+- the character experience: multiplied by it;
+- the unit experience: **Every n-th turn** is divided by it and rounded, but it's never less
+  than 1. With the default 2: the multiplier 2 gives a rank every turn, 0.5 every 4th turn,
+  0.75 every 3rd turn, 1.25 every 2nd turn, 1.5 and 1.75 every turn.
+
+The effect bundle stays the same, and so do the start turns. A skipped culture gets no bonuses,
+whatever its multiplier.
+
+The multipliers belong to a campaign, like the skipped cultures: a change made in a campaign
+applies to that campaign only, one made in the main menu applies to the next campaign. If you
+add the mod to a running campaign, every culture has 1 until you change it there. Cultures from
+other mods always have 1.
+
 ## What the AI gets
 
 ### Gold
@@ -65,29 +86,33 @@ Cultures from other mods aren't on the list, so they always get the bonuses.
 From the first turn, on each of its turns a faction gets a share of its income:
 
 ```
-income × (turn × percent per turn + your regions × percent per region)
+income × (turn × percent per turn + your regions × percent per region) × bonus multiplier
 ```
 
 So the gold grows on its own as the campaign goes on, and faster when you expand. With the
 default settings, on turn 44 with 61 regions the share is 44 × 2% + 61 × 4% = 332%: a faction
-with an income of 6,691 gets 22,214 gold on that turn.
+with an income of 6,691 gets 22,214 gold on that turn. With the multiplier 0.5 its culture would
+get half of that, 11,107.
 
 ### Character experience
 
 From the start turn, on each of its turns every character of the faction gets the turn number
-multiplied by **Experience per turn number**. With the default settings that's 2,000 on turn 10
-and 8,800 on turn 44.
+multiplied by **Experience per turn number** and by the bonus multiplier of its culture. With the
+default settings that's 2,000 on turn 10 and 8,800 on turn 44.
 
 ### Unit experience
 
-From the start turn, every unit in an army with a general gets one rank, up to rank 9.
+From the start turn, every unit in an army with a general gets one rank, up to rank 9. With the
+default settings that's on every 2nd turn: 10, 12, 14 and so on.
 
 **Every n-th turn** counts from the start of the campaign, not from the start turn. With 3 and
-the start turn 10, units get a rank on turns 12, 15, 18 and so on.
+the start turn 10, units get a rank on turns 12, 15, 18 and so on. The bonus multiplier of the
+culture divides it, see [Bonus multiplier for cultures](#bonus-multiplier-for-cultures).
 
 ### Effect bundle
 
-This bonus has no settings. Each faction has one bundle at a time, the one of the current turn:
+This bonus has no settings, and the bonus multiplier doesn't change it. Each faction has one
+bundle at a time, the one of the current turn:
 
 | From turn | Research rate | Local recruitment capacity | Growth |
 |---:|---:|---:|---:|
@@ -115,8 +140,9 @@ AF Armageddon was made to be used with **Radious**, and it's compatible with any
 Balance depends on many things: mods, factions, random events, your skills and your style. All
 you can expect is that the difficulty gradually grows.
 
-If it's too hard, lower the two gold percents, move the start turns later or skip some cultures.
-If it's too easy, raise the percents or move the start turns earlier.
+If it's too hard, lower the two gold percents, move the start turns later, lower the multipliers
+of the strongest cultures or skip some cultures. If it's too easy, raise the percents, move the
+start turns earlier or raise the multipliers.
 
 ## Good to know
 

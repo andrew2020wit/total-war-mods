@@ -23,16 +23,23 @@ know one player, and it has never been run in a multiplayer campaign.
 Bonuses applied per eligible AI faction turn:
 - **Treasury gold** — proportional to the AI faction's own income, scaled by current
   turn number and by the player's region count (see `settings.time_percent` /
-  `settings.regions_percent`).
+  `settings.regions_percent`), multiplied by the bonus multiplier of the culture.
 - **Character XP** — added to every character in the faction, scaled by turn number
-  (`settings.experience_for_character`), starting from turn
-  `settings.character_experience_start_turn`.
+  (`settings.experience_for_character`) and by the bonus multiplier of the culture, rounded,
+  starting from turn `settings.character_experience_start_turn`.
 - **Unit XP** — +1 experience level per unit in armies that have a general, starting from
   turn `settings.army_experience_start_turn`, on every n-th turn
-  (`settings.army_experience_turn_interval`: 1 — every turn, 3 — turns 3, 6, 9...).
+  (`settings.army_experience_turn_interval`: 1 — every turn, 3 — turns 3, 6, 9...). The
+  interval is divided by the bonus multiplier of the culture and rounded half up, never below 1:
+  `max(1, floor(interval / multiplier + 0.5))`.
 - **Effect bundle** — one of five escalating "ai_buff" effect bundles
   (`af_armageddon_effect_bundle_ai_buff_1..5`) is applied based on turn number
-  (see `effect_bundles_turns`); older bundles are removed first so only one is active.
+  (see `effect_bundles_turns`); older bundles are removed first so only one is active. The
+  bonus multiplier doesn't change it.
+
+The **bonus multiplier** is the `bonus_multiplier_<culture>` option, 0.25 to 2, by default 1. A
+culture without that option (another mod's, or no MCT, or multiplayer) gets 1, and so does a
+value that isn't a positive number.
 
 ## Repository layout
 
@@ -85,15 +92,17 @@ defaults from the `settings` table in the script.
 | `experience_for_character`        | slider   | `200`   | Character XP multiplied by the turn number, 0-5000 |
 | `character_experience_start_turn` | slider   | `10`    | First turn of character XP, 1-200           |
 | `army_experience_start_turn`      | slider   | `10`    | First turn of unit XP, 1-200                |
-| `army_experience_turn_interval`   | slider   | `1`     | Unit XP on every n-th turn, 1-50            |
+| `army_experience_turn_interval`   | slider   | `2`     | Unit XP on every n-th turn, 1-50, before the bonus multiplier |
 | `enable_logging`                  | checkbox | `false` | Writes `!!af_armageddon.txt`                |
 | `skip_bonuses_<culture>`          | checkbox | `false` | No bonuses for this culture, one per culture |
+| `bonus_multiplier_<culture>`      | dropdown | `'1'`   | `'0.25'` to `'2'` in steps of 0.25, one per culture, see [What the mod does](#what-the-mod-does) |
 
 Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
 them as soon as they're saved in its window, so a change applies from the next faction turn.
 
-All options but `skip_bonuses_<culture>` are global (`set_is_global(true)`): one value for all
-campaigns. New options must set it too, unless they belong to a campaign.
+All options but `skip_bonuses_<culture>` and `bonus_multiplier_<culture>` are global
+(`set_is_global(true)`): one value for all campaigns. New options must set it too, unless they
+belong to a campaign.
 
 Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
 the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
@@ -102,15 +111,21 @@ player" of the region count is the first faction of
 `cm:get_human_factions()`, not the local one. It's the same faction in single player.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
-tests check that. The only exception is `skip_bonuses_<culture>`, see below.
+tests check that. The only exceptions are the options of the cultures, see below: the default
+of `bonus_multiplier_<culture>` is `default_bonus_multiplier` of the script.
 
 ### The list of cultures
 
 The `cultures` table of the MCT file is the only list of cultures in the repository: the
-script builds the option key from the culture of the faction. So these options have no entry
-in `settings`, and a culture from another mod has no option and always gets the bonuses.
-`get_setting` passes `true` to `get_option_by_key`, otherwise MCT would write a warning to its
-log on each turn of such a faction.
+script builds the option keys (`skip_bonuses_<culture>`, `bonus_multiplier_<culture>`) from the
+culture of the faction. So these options have no entry in `settings`, and a culture from
+another mod has no options and always gets the bonuses as they are. `get_setting` passes `true`
+to `get_option_by_key`, otherwise MCT would write a warning to its log on each turn of such a
+faction.
+
+- The multiplier is a `dropdown`: its values are string keys (`'0.25'`...`'2'`), and the
+  script turns them into numbers with `tonumber`. Their text is the same string, not a loc key:
+  MCT shows a text without a loc entry as it is.
 
 - It's written by hand: MCT creates the options when this file loads, and its `multibox` type
   is an empty stub, `dropdown_game_object` is unfinished. Compare it with
@@ -120,12 +135,14 @@ log on each turn of such a faction.
 - These options belong to a campaign (`set_is_global(false)`): MCT keeps them in the save, so
   the script reads them like any other option. A value set in the main menu applies to the
   next new campaign only. A campaign saved without them, for example one the mod was added
-  to, has them all off, whatever the menu says.
+  to or one saved before v9.4.0 for the multipliers, has the defaults (no culture skipped, all
+  multipliers 1), whatever the menu says.
 - `set_text` gets the loc key `cultures_name_<culture>` of the game, so the names are in the
   language of the game. A key without text is shown as it is.
-- The section is the last one. MCT gives each of the two columns the same number of sections,
-  whatever their height, and the columns scroll. So the list is in the second column, after
-  Debug, and the other settings stay in view.
+- The two sections of the cultures are the last ones. MCT gives each of the two columns the
+  same number of sections, whatever their height, and the columns scroll. With six sections
+  that's three in each: the lists are in the second column, after Debug, and the other
+  settings stay in view. A new section would break that split.
 
 ## Toolchain
 
@@ -169,7 +186,8 @@ log on each turn of such a faction.
 
 `tests/af-armageddon/model_test.lua` lives outside `mods/`, so it never gets into the pack.
 It covers the unit XP (when it's added and which units and factions get it), the character
-XP, the gold, who gets the bonuses, the effect bundle of each turn and the settings: the MCT
+XP, the gold, who gets the bonuses, the bonus multiplier of the cultures, the effect bundle of
+each turn and the settings: the MCT
 file against the defaults of the script, work without MCT, the log option. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the
 MCT options. The local functions of the script aren't reachable, so it checks what they lead

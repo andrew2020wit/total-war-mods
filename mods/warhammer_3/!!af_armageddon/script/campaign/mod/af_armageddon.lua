@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.3.3'
+local mod_version = '9.4.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -13,9 +13,12 @@ local settings = {
     experience_for_character = 200,
     character_experience_start_turn = 10,
     army_experience_start_turn = 10,
-    -- 1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...)
-    army_experience_turn_interval = 1
+    -- 1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...), before the bonus multiplier
+    army_experience_turn_interval = 2
 }
+
+-- A culture without an option, from another mod or without MCT, gets the bonuses as they are
+local default_bonus_multiplier = 1
 
 local effect_bundles = {
     "af_armageddon_effect_bundle_ai_buff_5",
@@ -87,6 +90,24 @@ local function culture_is_skipped(culture)
     return get_setting('skip_bonuses_' .. culture)
 end
 
+-- The values of the dropdown are strings, '0.25' to '2'
+local function get_bonus_multiplier(culture)
+    local multiplier = tonumber(get_setting('bonus_multiplier_' .. culture))
+
+    if not multiplier or multiplier <= 0 then
+        return default_bonus_multiplier
+    end
+
+    return multiplier
+end
+
+-- The multiplier shortens the interval: 2 makes it twice as short, 0.5 twice as long
+local function get_army_experience_turn_interval(bonus_multiplier)
+    local interval = math.floor(get_setting('army_experience_turn_interval') / bonus_multiplier + 0.5)
+
+    return math.max(1, interval)
+end
+
 -- Once per turn, on the first faction. The keys come from MCT, as the cultures are listed only there
 local function log_settings()
     local current_turn = cm:turn_number()
@@ -154,23 +175,24 @@ local function set_effect_bundle(faction_name)
     cm:apply_effect_bundle(current_bundle_key, faction_name, 2)
 end
 
-local function add_xp_to_army(faction_name)
+local function add_xp_to_army(faction_name, bonus_multiplier)
     local current_turn =  cm:turn_number()
 
     if current_turn < get_setting('army_experience_start_turn') then
         return
     end
 
-    if current_turn % get_setting('army_experience_turn_interval') ~= 0 then
+    local interval = get_army_experience_turn_interval(bonus_multiplier)
+
+    if current_turn % interval ~= 0 then
         return
     end
-
 
     local faction = cm:get_faction(faction_name)
     local force_list = faction:military_force_list()
     local is_logging = is_logging_enabled()
 
-    log('add_xp_to_army, faction: ' .. faction_name)
+    log('add_xp_to_army, faction: ' .. faction_name .. ', every n-th turn: ' .. tostring(interval))
 
     for i = 0, force_list:num_items() - 1 do
         local force = force_list:item_at(i)
@@ -200,7 +222,7 @@ local function add_xp_to_army(faction_name)
     end
 end
 
-local function add_xp_to_characters(faction_name)
+local function add_xp_to_characters(faction_name, bonus_multiplier)
     local current_turn = cm:turn_number()
 
     if current_turn < get_setting('character_experience_start_turn') then
@@ -208,7 +230,8 @@ local function add_xp_to_characters(faction_name)
     end
 
     local faction = cm:get_faction(faction_name)
-    local xp_bonus = current_turn * get_setting('experience_for_character')
+    -- Rounded: 0.25 of 50 is 12.5 per turn
+    local xp_bonus = math.floor(current_turn * get_setting('experience_for_character') * bonus_multiplier + 0.5)
     local is_logging = is_logging_enabled()
 
     local characters = faction:character_list()
@@ -245,10 +268,15 @@ local function help_ai_each_turn(context)
         return
     end
 
-    if culture_is_skipped(current_faction:culture()) then
+    local culture = current_faction:culture()
+
+    if culture_is_skipped(culture) then
         log('skip bonuses, faction: ' .. current_faction_name)
         return
     end
+
+    -- For the gold, the character experience and the unit experience, not for the effect bundle
+    local bonus_multiplier = get_bonus_multiplier(culture)
 
     -- Not the local faction: in multiplayer it's different on each machine, a desync again
     local player_faction_name = cm:get_human_factions()[1]
@@ -261,7 +289,7 @@ local function help_ai_each_turn(context)
 
     local ai_income = current_faction:income()
 
-    local gold_bonus = (region_multiplier + time_multiplier) * ai_income;
+    local gold_bonus = (region_multiplier + time_multiplier) * ai_income * bonus_multiplier
 
     local is_logging = is_logging_enabled()
     local debug_treasury_before = is_logging and current_faction:treasury()
@@ -277,15 +305,16 @@ local function help_ai_each_turn(context)
             ". time_multiplier: " .. tostring(time_multiplier) .. '\n' ..
             ". player_regions_number: " .. tostring(player_regions_number) .. '\n' ..
             ". region_multiplier: " .. tostring(region_multiplier) .. '\n' ..
+            ". bonus_multiplier: " .. tostring(bonus_multiplier) .. '\n' ..
             ". treasury_before - after: " ..
             tostring(debug_treasury_before) .. ' => ' .. current_faction:treasury() .. '\n' ..
             "===================="
         )
     end
 
-    add_xp_to_characters(current_faction_name)
+    add_xp_to_characters(current_faction_name, bonus_multiplier)
 
-    add_xp_to_army(current_faction_name)
+    add_xp_to_army(current_faction_name, bonus_multiplier)
 
     set_effect_bundle(current_faction_name)
 end

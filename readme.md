@@ -6,7 +6,8 @@
 
 "Armageddon" modification increases difficulty for the middle and late game.
 
-All AI factions get various bonuses. You can turn them off for chosen cultures.
+All AI factions get various bonuses. You can turn them off for chosen cultures, or make them
+smaller or bigger for each culture.
 
 ### Compatibility
 
@@ -21,14 +22,16 @@ support it.
 
 The settings are in [Mod Configuration Tool](https://steamcommunity.com/sharedfiles/filedetails/?id=2927955021)
 (MCT). It's optional: without it the mod works with the default settings.
-The settings are global: one set of values for all campaigns. Only the list of cultures
-without bonuses is set for each campaign.
+The settings are global: one set of values for all campaigns. Only the cultures without
+bonuses and the bonus multipliers of the cultures are set for each campaign.
 
 - gold: the percent of the AI income per player region and per turn;
 - character experience: the amount and the start turn;
 - unit experience: the start turn and the turn interval;
 - a log file;
-- the cultures that get no bonuses.
+- the cultures that get no bonuses;
+- a bonus multiplier for each culture, 0.25 to 2: it multiplies the gold and the character
+  experience and divides the interval of the unit experience.
 
 ### About balance
 

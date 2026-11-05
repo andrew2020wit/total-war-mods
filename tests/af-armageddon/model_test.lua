@@ -38,7 +38,15 @@ local function read_mct_options()
         set_default_value = function(self, value) self.default = value end,
         set_is_global = function(self, value) self.is_global = value end,
         slider_set_min_max = function(self, min, max) self.min, self.max = min, max end,
-        slider_set_step_size = function(self, step) self.step = step end
+        slider_set_step_size = function(self, step) self.step = step end,
+        -- Like MCT: the first value is the default until one is marked as the default
+        add_dropdown_values = function(self, values)
+            self.values = values
+            self.default = values[1].key
+            for _, value in ipairs(values) do
+                if value.is_default then self.default = value.key end
+            end
+        end
     }
     local mct_mod = {
         set_title = function(_, text) title = text end,
@@ -128,7 +136,9 @@ local function play(world)
                     return {
                         get_option_by_key = function(_, option_key)
                             -- A culture from another mod has no option
-                            if option_key:find('^skip_bonuses_') and not mct_options[option_key] then
+                            local is_culture_option = option_key:find('^skip_bonuses_')
+                                or option_key:find('^bonus_multiplier_')
+                            if is_culture_option and not mct_options[option_key] then
                                 return nil
                             end
                             assert(mct_options[option_key], 'no such MCT option: ' .. option_key)
@@ -253,12 +263,14 @@ end
 
 print('-- unit experience')
 
-check_turns('by default: every turn from turn 10', { last_turn = 14 }, '10,11,12,13,14')
+check_turns('by default: every 2nd turn from turn 10', { last_turn = 15 }, '10,12,14')
 
-check_turns('the old limit of turn 30 is gone', {
-    settings = { army_experience_turn_interval = 2 },
-    last_turn = 34
-}, '10,12,14,16,18,20,22,24,26,28,30,32,34')
+check_turns('every turn', {
+    settings = { army_experience_turn_interval = 1 },
+    last_turn = 13
+}, '10,11,12,13')
+
+check_turns('the old limit of turn 30 is gone', { last_turn = 34 }, '10,12,14,16,18,20,22,24,26,28,30,32,34')
 
 check_turns('every 3rd turn, counted from turn 1', {
     settings = { army_experience_start_turn = 1, army_experience_turn_interval = 3 },
@@ -271,7 +283,7 @@ check_turns('the start turn and the interval work together', {
 }, '12,15,18,21')
 
 check_turns('a changed start turn', {
-    settings = { army_experience_start_turn = 5 },
+    settings = { army_experience_start_turn = 5, army_experience_turn_interval = 1 },
     last_turn = 7
 }, '5,6,7')
 
@@ -301,8 +313,8 @@ check_character_xp('it does not depend on the start turn of the units', {
 
 check_turns('the units do not depend on the start turn of the characters', {
     settings = { character_experience_start_turn = 20 },
-    last_turn = 11
-}, '10,11')
+    last_turn = 12
+}, '10,12')
 
 print('-- who gets the bonuses')
 
@@ -397,6 +409,103 @@ do
         gold({ settings = { regions_percent = 10 }, last_turn = 1, player_regions = 2 }))
 end
 
+print('-- bonus multiplier')
+
+do
+    local function greenskins(multiplier, other_settings)
+        local result = other_settings or {}
+        result.bonus_multiplier_wh_main_grn_greenskins = multiplier
+        return result
+    end
+
+    local function gold(world)
+        return math.floor(play(world).last_gold + 0.5)
+    end
+
+    local function check_gold(name, world, expected)
+        local value = gold(world)
+        check(name, value == expected, value)
+    end
+
+    check_gold('gold: 1 by default', { last_turn = 1, player_regions = 2 }, 100)
+    check_gold('gold: multiplied by 0.5', { settings = greenskins('0.5'), last_turn = 1, player_regions = 2 }, 50)
+    check_gold('gold: multiplied by 2', { settings = greenskins('2'), last_turn = 1, player_regions = 2 }, 200)
+    check_gold('gold: multiplied by 0.25', { settings = greenskins('0.25'), last_turn = 1, player_regions = 2 }, 25)
+    check_gold('gold: the multiplier of another culture changes nothing', {
+        settings = { bonus_multiplier_wh_main_emp_empire = '2' },
+        last_turn = 1
+    }, 20)
+    check_gold('gold: a culture from another mod gets 1', {
+        settings = greenskins('2'),
+        last_turn = 1,
+        ai_culture = 'unknown_culture'
+    }, 20)
+    check_gold('gold: without MCT 1', { no_mct = true, last_turn = 1 }, 20)
+    check_gold('gold: multiplayer gets 1', { is_mp = true, settings = greenskins('2'), last_turn = 1 }, 20)
+    check_gold('gold: a value that is not a number counts as 1', { settings = greenskins('x'), last_turn = 1 }, 20)
+    check_gold('gold: a change applies from the next turn',
+        { changes = { [3] = greenskins('2') }, last_turn = 3 }, 120)
+
+    check_character_xp('character experience: multiplied by 0.5', {
+        settings = greenskins('0.5'),
+        last_turn = 11
+    }, '10:1000,11:1100')
+    check_character_xp('character experience: multiplied by 1.75', {
+        settings = greenskins('1.75'),
+        last_turn = 11
+    }, '10:3500,11:3850')
+    check_character_xp('character experience: rounded to an integer', {
+        settings = greenskins('0.25', { experience_for_character = 50 }),
+        last_turn = 11
+    }, '10:125,11:138')
+    check_character_xp('character experience: the start turn stays', {
+        settings = greenskins('2'),
+        last_turn = 10
+    }, '10:4000')
+
+    -- The default interval is 2
+    local function interval_turns(name, multiplier, last_turn, expected, other_settings)
+        check_turns('unit experience: ' .. name, {
+            settings = greenskins(multiplier, other_settings),
+            last_turn = last_turn
+        }, expected)
+    end
+
+    interval_turns('2 makes the interval twice as short', '2', 13, '10,11,12,13')
+    interval_turns('0.5 makes it twice as long', '0.5', 20, '12,16,20')
+    interval_turns('0.25: every 8th turn', '0.25', 24, '16,24')
+    interval_turns('0.75: 2.67 is rounded to 3', '0.75', 18, '12,15,18')
+    interval_turns('1.25: 1.6 is rounded to 2', '1.25', 14, '10,12,14')
+    interval_turns('1.5: 1.33 is rounded to 1', '1.5', 12, '10,11,12')
+    interval_turns('1.75: 1.14 is rounded to 1', '1.75', 12, '10,11,12')
+    interval_turns('a half is rounded up: 3 / 2 = 1.5 is 2', '2', 14, '10,12,14',
+        { army_experience_turn_interval = 3 })
+    interval_turns('a changed interval is divided too: 5 / 0.5 = 10', '0.5', 30, '10,20,30',
+        { army_experience_turn_interval = 5 })
+    interval_turns('the interval never goes below 1', '2', 12, '10,11,12', { army_experience_turn_interval = 1 })
+    -- Not a value of the dropdown, only the guard: 1 / 4 rounds to 0
+    interval_turns('the interval never goes below 1, even at 0.25', '4', 12, '10,11,12',
+        { army_experience_turn_interval = 1 })
+    interval_turns('the start turn stays', '2', 11, '10,11', { army_experience_start_turn = 10 })
+
+    local skipped = play({
+        settings = greenskins('2', { skip_bonuses_wh_main_grn_greenskins = true }),
+        last_turn = 10
+    })
+    check('a skipped culture gets nothing whatever its multiplier', skipped.gold_count == 0, skipped.gold_count)
+
+    local bundles = play({ settings = greenskins('0.25'), last_turn = 40 })
+    check('the effect bundle does not depend on the multiplier',
+        bundles.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1'
+        and bundles.bundles[40] == 'af_armageddon_effect_bundle_ai_buff_5',
+        tostring(bundles.bundles[10]) .. ', ' .. tostring(bundles.bundles[40]))
+
+    local logged = play({ settings = greenskins('0.5', { enable_logging = true }), last_turn = 12 })
+    check('the log has the multiplier of the gold', logged.log:find('bonus_multiplier: 0.5', 1, true) ~= nil, logged.log)
+    check('the log has the interval of the units',
+        logged.log:find('add_xp_to_army, faction: ai, every n-th turn: 4', 1, true) ~= nil, logged.log)
+end
+
 print('-- settings')
 
 do
@@ -416,9 +525,12 @@ do
     end
 
     local culture_options = 0
+    local multiplier_options = 0
+    local multiplier_values = '0.25,0.5,0.75,1,1.25,1.5,1.75,2'
 
     for key, option in pairs(mct_options) do
         local culture = key:match('^skip_bonuses_(.+)')
+        local multiplier_culture = key:match('^bonus_multiplier_(.+)')
 
         if culture then
             culture_options = culture_options + 1
@@ -426,12 +538,30 @@ do
             check(key .. ': off by default', option.default == false, option.default)
             check(key .. ': for each campaign', option.is_global == false, option.is_global)
             check(key .. ': the name from the game', option.text == 'cultures_name_' .. culture, option.text)
+            check(key .. ': has a multiplier', mct_options['bonus_multiplier_' .. culture] ~= nil)
+        elseif multiplier_culture then
+            multiplier_options = multiplier_options + 1
+            check(key .. ': a dropdown', option.type == 'dropdown', option.type)
+            check(key .. ': 1 by default', option.default == '1', option.default)
+            check(key .. ': for each campaign', option.is_global == false, option.is_global)
+            check(key .. ': the name from the game', option.text == 'cultures_name_' .. multiplier_culture, option.text)
+            check(key .. ': has a skip option', mct_options['skip_bonuses_' .. multiplier_culture] ~= nil)
+
+            local keys, texts = {}, {}
+            for _, value in ipairs(option.values or {}) do
+                keys[#keys + 1] = value.key
+                texts[#texts + 1] = value.text
+            end
+            check(key .. ': the values', table.concat(keys, ',') == multiplier_values, table.concat(keys, ','))
+            check(key .. ': the texts are the values', table.concat(texts, ',') == multiplier_values)
         else
             check('a default for the MCT option ' .. key, defaults[key] ~= nil)
         end
     end
 
     check('an option for each culture', culture_options == 26, culture_options)
+    check('a multiplier for each culture', multiplier_options == 26, multiplier_options)
+    check('the interval of the units is 2 by default', defaults.army_experience_turn_interval == 2)
 
     check('logging is off by default', defaults.enable_logging == false)
 
@@ -439,14 +569,18 @@ do
     check('the MCT title has the version of the script', mct_title == 'AF Armageddon v' .. version, mct_title)
 end
 
-check_turns('without MCT: the defaults', { no_mct = true, last_turn = 11 }, '10,11')
-check_turns('MCT without this mod: the defaults', { no_mct_mod = true, last_turn = 11 }, '10,11')
+check_turns('without MCT: the defaults', { no_mct = true, last_turn = 12 }, '10,12')
+check_turns('MCT without this mod: the defaults', { no_mct_mod = true, last_turn = 12 }, '10,12')
 
 check_turns('multiplayer: the defaults, not the values of this player', {
     is_mp = true,
-    settings = { army_experience_start_turn = 1, army_experience_turn_interval = 2 },
-    last_turn = 11
-}, '10,11')
+    settings = {
+        army_experience_start_turn = 1,
+        army_experience_turn_interval = 1,
+        bonus_multiplier_wh_main_grn_greenskins = '0.5'
+    },
+    last_turn = 12
+}, '10,12')
 
 do
     local result = play({ is_mp = true, other_is_local = true, last_turn = 1, player_regions = 1 })
@@ -454,9 +588,9 @@ do
 end
 
 check_turns('a change applies from the next turn', {
-    changes = { [11] = { army_experience_turn_interval = 2 } },
+    changes = { [11] = { army_experience_turn_interval = 1 } },
     last_turn = 13
-}, '10,12')
+}, '10,11,12,13')
 
 do
     local off = play({ last_turn = 10 })

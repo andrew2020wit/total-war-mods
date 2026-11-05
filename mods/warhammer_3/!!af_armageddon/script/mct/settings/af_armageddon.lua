@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.3.3'
+local mod_version = '9.4.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
@@ -60,10 +60,10 @@ army_start_turn:set_is_global(true)
 
 local army_turn_interval = mct_mod:add_new_option("army_experience_turn_interval", "slider")
 army_turn_interval:set_text("Every n-th turn")
-army_turn_interval:set_tooltip_text("1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...).")
+army_turn_interval:set_tooltip_text("1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...). Divided by the bonus multiplier of the culture and rounded, but never below 1.")
 army_turn_interval:slider_set_min_max(1, 50)
 army_turn_interval:slider_set_step_size(1)
-army_turn_interval:set_default_value(1)
+army_turn_interval:set_default_value(2)
 army_turn_interval:set_is_global(true)
 
 mct_mod:add_new_section("debug", "Debug")
@@ -74,8 +74,8 @@ logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder.")
 logging:set_default_value(false)
 logging:set_is_global(true)
 
--- The last section: MCT splits the sections between two columns by their number, so this long
--- list gets the scroll of the second column and doesn't push the other settings down
+-- The last sections: MCT splits the sections between two columns by their number, so these long
+-- lists get the scroll of the second column and don't push the other settings down
 mct_mod:add_new_section("skip_bonuses", "Skip the bonuses for cultures")
 
 -- The keys of db/cultures_tables, by their English names, without the prologue Kislev
@@ -116,4 +116,28 @@ for _, culture in ipairs(cultures) do
     skip_culture:set_default_value(false)
     -- Each campaign has its own list: MCT keeps these values in the save
     skip_culture:set_is_global(false)
+end
+
+mct_mod:add_new_section("bonus_multiplier", "Bonus multiplier for cultures")
+
+-- The keys of the dropdown are strings, the script turns them into numbers
+local bonus_multipliers = { "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2" }
+local bonus_multiplier_values = {}
+
+for _, multiplier in ipairs(bonus_multipliers) do
+    bonus_multiplier_values[#bonus_multiplier_values + 1] = {
+        key = multiplier,
+        -- Not a loc key: MCT shows such a text as it is
+        text = multiplier,
+        is_default = multiplier == "1"
+    }
+end
+
+for _, culture in ipairs(cultures) do
+    local bonus_multiplier = mct_mod:add_new_option("bonus_multiplier_" .. culture, "dropdown")
+    bonus_multiplier:set_text("cultures_name_" .. culture)
+    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change.")
+    bonus_multiplier:add_dropdown_values(bonus_multiplier_values)
+    -- Each campaign has its own values, like the skipped cultures
+    bonus_multiplier:set_is_global(false)
 end
