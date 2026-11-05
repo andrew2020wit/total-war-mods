@@ -26,10 +26,11 @@ You can add the mod to a running campaign. Don't remove it afterwards, see
 
 ## Settings
 
-![The settings window](../imgs/armageddon/armageddon-settings.png)
+![The settings window, with the list of a bonus multiplier open](../imgs/armageddon/arm-settings-9-5.png)
 
 Open the Mod Configuration Tool window in the game and choose **AF Armageddon**, then **Settings**.
-The version of the mod is shown in its title.
+The version of the mod is shown in its title. The left column holds the gold and the experience,
+the right one the log and the bonus multipliers of the cultures.
 
 | Section | Option | Default | What it does |
 |---|---|---:|---|
@@ -56,8 +57,9 @@ nothing. All other cultures always get the bonuses.
 The last section lists the cultures of the game and its DLCs. It's long, so scroll the right
 column of the window to see all of them.
 
-Each culture has a multiplier: 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 or 5. With the
-default 1 the culture gets the bonuses as they are. The multiplier changes:
+Each culture has a multiplier: 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 or 5. The open
+list shows the values up to 2: scroll it down to see 3, 4 and 5. With the default 1 the culture
+gets the bonuses as they are. The multiplier changes:
 
 - the gold: multiplied by it;
 - the character experience: multiplied by it;
