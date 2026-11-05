@@ -7,6 +7,8 @@ hands at the start of each of your turns:
 - it builds the buildings you marked as favorites;
 - it spends your characters' skill points according to the priorities you set.
 
+It also adds a button that fuses your spare magic items for you.
+
 Each of these can be turned on or off.
 
 ## Installation
@@ -33,10 +35,11 @@ The version of the mod is shown in its title.
 | Minimum treasury | 5000 | The money the mod never spends on buildings |
 | Build favorite buildings at the start of the turn | On | Builds your favorite buildings |
 | Spend skill points at the start of the turn | On | Spends skill points and shows the priority stars |
+| Auto fuse button in the global pool | On | Shows the button that fuses magic items |
 | Write a log file | Off | Writes a log, useful for finding problems |
 
 The settings are the same for all your campaigns. A change takes effect from your next turn,
-except for the priority stars, which appear right away.
+except for the priority stars and the auto fuse button, which appear or go away right away.
 
 ## Minimum treasury
 
@@ -136,6 +139,31 @@ skills without a priority, in the order of the skill tree.
 > points, including on skills without a priority. The only way to undo a choice is the game's
 > skill reset. If you don't want this, turn the option off before you end the turn.
 
+## Auto fuse of magic items
+
+The game lets you fuse two magic items of the same rarity into a random item of the next rarity:
+tick two items in the global pool of the character panel and press **Fuse**. The mod adds a
+round button to the header of the global pool, to the right of its title, which does this for
+you over and over:
+
+1. It takes two **unequipped** common items of the same category, such as two weapons or two
+   armours, and fuses them.
+2. It repeats this one pair at a time while such pairs are left.
+3. Then it does the same with the uncommon items, including the ones it has just made.
+
+- Items that any of your characters has equipped are never fused, whether the
+  **Only show unequipped items** box is ticked or not.
+- Rare, unique and crafted items are never fused, and neither are followers (the Ancillaries
+  tab).
+- Items of different categories are never fused together. An item without a pair of its
+  category and rarity stays as it is.
+- The game's own rules still apply: the mod fuses only the pairs that the Fuse button would
+  accept.
+- It works only in your turn. Each pair takes about half a second, and the button is greyed out
+  until it's done.
+- A fusion can't be undone. If you want to keep a common or uncommon item, equip it on a
+  character first.
+
 ## Compatibility with other mods
 
 AF Tweaker is meant to work alongside other mods, and it was tested in a campaign with
@@ -152,6 +180,8 @@ AF Tweaker is meant to work alongside other mods, and it was tested in a campaig
   on for each job.
 - A mod that replaces the building popup or the skill tree can hide the stars. The game keeps
   working, but you may not be able to mark buildings or set priorities.
+- The same goes for the auto fuse button and a mod that replaces the global pool of the
+  character panel.
 
 ## Good to know
 

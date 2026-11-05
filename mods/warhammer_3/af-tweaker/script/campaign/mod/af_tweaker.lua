@@ -1,7 +1,7 @@
 -- AF Tweaker, "Total War Warhammer 3" modification
 -- af_tweaker
 
-local mod_version = '0.6.0'
+local mod_version = '0.7.0'
 
 local mct_mod_key = 'af_tweaker'
 
@@ -11,10 +11,12 @@ local settings = {
     auto_upgrade_enabled = true,
     favorite_buildings_enabled = true,
     auto_skills_enabled = true,
+    auto_fuse_enabled = true,
     min_treasury = 5000,
     turn_start_delay = 0.5,
     round_delay = 0.5,
     skill_commit_rounds = 3,
+    fuse_confirm_rounds = 6,
     ui_poll_ms = 250,
     ui_poll_max_failures = 10
 }
@@ -40,11 +42,23 @@ local skill_button_name = 'af_tweaker_skill_priority_button'
 local skill_button_template = 'ui/templates/round_extra_small_button'
 local skill_button_transparent_image = 'ui/skins/default/1x1_transparent_white.png'
 
+local faction_context = 'CcoCampaignFaction'
+local fuse_button_name = 'af_tweaker_auto_fuse_button'
+local fuse_button_template = 'ui/templates/round_extra_small_button'
+local fuse_button_image = 'ui/skins/default/af_tweaker_auto_fuse.png'
+
+-- The rarities that are fused, the lowest first, as FrameState of an item names them: the ui_state
+-- of its row in ancillary_uniqueness_groupings. Rare, unique and crafted items are never fused.
+local fuse_levels = { 'common', 'uncommon' }
+
 -- In the order of adding: { key, priority }
 local favorites = {}
 local favorite_button_key = nil
 local favorite_button_slot_id = nil
 local skill_priorities = {}
+
+-- The run of the auto fuse button, nil while none goes
+local fuse_run = nil
 
 local function get_setting(option_key)
     local default_value = settings[option_key]
@@ -100,17 +114,22 @@ end
 
 -- Repeats a round while it returns true. Commands are asynchronous, so the game needs the
 -- delay to process the ones of a round before the next round reads its data.
-local function run_rounds(name, round, on_done)
+local function run_rounds(name, round, on_done, on_error)
     local is_ok, has_more = pcall(round)
 
     if not is_ok then
         log_errors(name .. ': ' .. tostring(has_more))
+
+        if on_error then
+            on_error()
+        end
+
         return
     end
 
     if has_more then
         cm:callback(function()
-            run_rounds(name, round, on_done)
+            run_rounds(name, round, on_done, on_error)
         end, settings.round_delay)
     else
         on_done()
@@ -924,6 +943,221 @@ local function run_auto_skills(faction_name)
     end)
 end
 
+-- The items are read from the faction, like the global pool of the character panel does
+local function get_faction_value(faction_cqi, expression)
+    return common.get_context_value(faction_context, faction_cqi, expression)
+end
+
+local function item_expression(item_index)
+    return 'AncillaryList.At(' .. item_index .. ')'
+end
+
+-- The items of the Magic Items tab of the global pool that no character has equipped.
+-- CanBeDestroyed is what the game checks before it lets the player tick an item there.
+local function is_free_magic_item(faction_cqi, item_index)
+    local item = item_expression(item_index)
+    local record = item .. '.AncillaryRecordContext'
+    local category = record .. '.CategoryContext'
+
+    return get_faction_value(faction_cqi, 'IsContextValid(' .. item .. '.CharacterEquippedToContext) == false'
+        .. ' && ' .. item .. '.IsFusable'
+        .. ' && ' .. record .. '.CanBeDestroyed'
+        .. ' && ' .. category .. '.IsHidden == false'
+        .. ' && ' .. category .. '.Category != "general"'
+        .. ' && ' .. category .. '.Category != "mount"'
+    )
+end
+
+-- Free items of the fused levels by level and category, in the order of the list
+local function get_fuse_candidates(faction_cqi)
+    local candidates = {}
+
+    for _, level in ipairs(fuse_levels) do
+        candidates[level] = { categories = {}, items = {} }
+    end
+
+    local item_number = get_faction_value(faction_cqi, 'AncillaryList.Size') or 0
+
+    for item_index = 0, item_number - 1 do
+        if is_free_magic_item(faction_cqi, item_index) then
+            local record = item_expression(item_index) .. '.AncillaryRecordContext'
+            local level = get_faction_value(faction_cqi, record .. '.FrameState')
+            local by_level = level and candidates[level]
+
+            if by_level then
+                local category = get_faction_value(faction_cqi, record .. '.CategoryContext.Category') or ''
+                local items = by_level.items[category]
+
+                if not items then
+                    items = {}
+                    by_level.items[category] = items
+                    table.insert(by_level.categories, category)
+                end
+
+                table.insert(items, item_index)
+            end
+        end
+    end
+
+    return candidates, item_number
+end
+
+-- Two items of the same level and category that the game lets fuse, the lowest level first:
+-- the items made from it are fused at the next level only after it.
+local function find_fuse_pair(faction_cqi, candidates)
+    for _, level in ipairs(fuse_levels) do
+        local by_level = candidates[level]
+
+        for _, category in ipairs(by_level.categories) do
+            local items = by_level.items[category]
+
+            for first = 1, #items - 1 do
+                for second = first + 1, #items do
+                    local can_fuse = get_faction_value(faction_cqi,
+                        item_expression(items[first]) .. '.CanFuse(' .. item_expression(items[second]) .. ')'
+                    )
+
+                    if can_fuse then
+                        return items[first], items[second], level
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function item_title(faction_cqi, item_index)
+    local item = item_expression(item_index)
+
+    return with_name(
+        get_faction_value(faction_cqi, item .. '.Name'),
+        tostring(get_faction_value(faction_cqi, item .. '.AncillaryRecordContext.Key'))
+    )
+end
+
+-- Returns true if the next round can go on: the last fusion is done, or there was none
+local function check_last_fusion(run)
+    local pending = run.pending
+
+    if not pending then
+        return true
+    end
+
+    if not pending.is_confirmed then
+        if pending.rounds_waited < settings.fuse_confirm_rounds then
+            pending.rounds_waited = pending.rounds_waited + 1
+            return false
+        end
+
+        error('the game did not fuse ' .. pending.title)
+    end
+
+    local item_number = get_faction_value(run.faction_cqi, 'AncillaryList.Size') or 0
+
+    -- The new item comes from a vanilla listener of the same event, it gets one more round
+    if item_number ~= pending.expected_number and not pending.is_settled then
+        pending.is_settled = true
+        return false
+    end
+
+    -- Every fusion has to take two items, or the rounds might never end
+    if item_number >= pending.item_number then
+        error('the items are still there after ' .. pending.title)
+    end
+
+    run.pending = nil
+
+    return true
+end
+
+-- One fusion per round, as the user does it with the Fuse button: two items are taken, the game
+-- sends AncillariesFused, and a vanilla listener of it adds a random item of the next rarity and
+-- the same category. The next round reads the list again, new items included.
+-- Returns true while there is more to do.
+local function run_fuse_round(run)
+    if not cm:get_faction(run.faction_name):is_factions_turn() then
+        log('auto fuse stopped: the turn is over')
+        return false
+    end
+
+    if not check_last_fusion(run) then
+        return true
+    end
+
+    local candidates, item_number = get_fuse_candidates(run.faction_cqi)
+    local first, second, level = find_fuse_pair(run.faction_cqi, candidates)
+
+    if not first then
+        return false
+    end
+
+    local title = level .. ': ' .. item_title(run.faction_cqi, first) .. ' + ' .. item_title(run.faction_cqi, second)
+
+    -- Before the command: the game may send the event while it runs
+    run.pending = {
+        title = title,
+        item_number = item_number,
+        expected_number = item_number - 1,
+        rounds_waited = 0,
+        is_confirmed = false,
+        is_settled = false
+    }
+
+    common.call_context_command(faction_context, run.faction_cqi,
+        item_expression(first) .. '.FuseForPlayer(' .. item_expression(second) .. ')'
+    )
+
+    run.fused[level] = run.fused[level] + 1
+    log('fuse ' .. title)
+
+    return true
+end
+
+local function on_ancillaries_fused()
+    fuse_run.pending.is_confirmed = true
+end
+
+local function start_auto_fuse()
+    local faction_name = cm:get_local_faction_name(true)
+    local faction = cm:get_faction(faction_name)
+
+    -- The game lets the player fuse only in their own turn
+    if not faction:is_factions_turn() then
+        log('auto fuse: not the turn of the player')
+        return
+    end
+
+    local run = {
+        faction_name = faction_name,
+        faction_cqi = faction:command_queue_index(),
+        fused = {}
+    }
+
+    for _, level in ipairs(fuse_levels) do
+        run.fused[level] = 0
+    end
+
+    fuse_run = run
+    log('auto fuse, turn: ' .. tostring(cm:turn_number()))
+
+    run_rounds('run_fuse_round', function()
+        return run_fuse_round(run)
+    end, function()
+        local parts = {}
+
+        for _, level in ipairs(fuse_levels) do
+            table.insert(parts, level .. ' pairs: ' .. run.fused[level])
+        end
+
+        log('auto fuse done, ' .. table.concat(parts, ', '))
+        fuse_run = nil
+    end, function()
+        fuse_run = nil
+    end)
+end
+
 local function on_player_turn_start(context)
     local auto_skills_enabled = get_setting('auto_skills_enabled')
     local auto_build_enabled = get_setting('auto_upgrade_enabled') or get_setting('favorite_buildings_enabled')
@@ -1197,13 +1431,73 @@ local function on_skill_button_click(context)
     log('skill priority: ' .. key .. ' = ' .. priority)
 end
 
+-- The button goes to the header of the global pool, to the right of its title:
+-- character_details_panel > ... > equipment_holder > global_pool > header
+local function refresh_fuse_button()
+    local global_pool = find_panel('character_details_panel', 'global_pool')
+
+    if not global_pool or not global_pool:Visible(true) then
+        return
+    end
+
+    -- Other components of the panel are named header too, this one is a child of the pool
+    local header = find_child_uicomponent(global_pool, 'header')
+
+    if not header then
+        return
+    end
+
+    local button = find_component(header, fuse_button_name)
+
+    -- The option can be turned off with the button already in the header
+    if not get_setting('auto_fuse_enabled') then
+        if button then
+            button:SetVisible(false)
+        end
+
+        return
+    end
+
+    if not button then
+        button = core:get_or_create_component(fuse_button_name, fuse_button_template, header)
+        button:SetImagePath(fuse_button_image, 0)
+        button:SetDockingPoint(6)
+        button:SetDockOffset(-6, 0)
+        button:SetTooltipText('Auto fuse: unequipped magic items are fused in pairs of the same rarity and category,'
+            .. ' common ones first, then uncommon ones, the new items included. Rare and unique items are kept.'
+            .. ' Works in your turn.', '', true)
+    end
+
+    if not button:Visible() then
+        button:SetVisible(true)
+    end
+
+    -- Inactive while a run goes. The game changes the other states by itself on hovers and clicks.
+    local is_inactive = button:CurrentState() == 'inactive'
+
+    if fuse_run and not is_inactive then
+        button:SetState('inactive')
+    elseif not fuse_run and is_inactive then
+        button:SetState('active')
+    end
+end
+
+local function on_fuse_button_click()
+    if not get_setting('auto_fuse_enabled') or fuse_run then
+        return
+    end
+
+    start_auto_fuse()
+end
+
 -- Vanilla components don't report hovers to scripts, and the game crashed in a test with
 -- common.force_report_of_all_ui_script_events on, so the UI is polled instead.
 -- A step survives a few failures in a row, which can come from the UI being rebuilt, and then
 -- stops: it would repeat several times per second otherwise. The other step goes on.
 local ui_poll_steps = {
     { name = 'refresh_favorite_button', handler = refresh_favorite_button, failures = 0 },
-    { name = 'refresh_skill_buttons', handler = refresh_skill_buttons, failures = 0 }
+    { name = 'refresh_skill_buttons', handler = refresh_skill_buttons, failures = 0 },
+    { name = 'refresh_fuse_button', handler = refresh_fuse_button, failures = 0 }
 }
 
 local function poll_ui()
@@ -1285,6 +1579,27 @@ core:add_listener(
         return context.string == favorite_button_name
     end,
     with_error_log('on_favorite_button_click', on_favorite_button_click),
+    true
+)
+
+core:add_listener(
+    "AfTweakerAutoFuseButton",
+    "ComponentLClickUp",
+    function(context)
+        return context.string == fuse_button_name
+    end,
+    with_error_log('on_fuse_button_click', on_fuse_button_click),
+    true
+)
+
+-- The game sends it when it has fused the two items of a command
+core:add_listener(
+    "AfTweakerAncillariesFused",
+    "AncillariesFused",
+    function(context)
+        return fuse_run ~= nil and fuse_run.pending ~= nil and context:faction():name() == fuse_run.faction_name
+    end,
+    with_error_log('on_ancillaries_fused', on_ancillaries_fused),
     true
 )
 

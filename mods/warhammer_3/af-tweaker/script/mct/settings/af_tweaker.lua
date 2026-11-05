@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '0.6.0'
+local mod_version = '0.7.0'
 
 local mct_mod = get_mct():register_mod("af_tweaker")
 
@@ -43,6 +43,14 @@ auto_skills:set_text("Spend skill points at the start of the turn")
 auto_skills:set_tooltip_text("Characters spend their skill points automatically. The star button on a skill card in the character panel sets a priority from 1 to 3: higher priorities go first, skills without a priority go last.")
 auto_skills:set_default_value(true)
 auto_skills:set_is_global(true)
+
+mct_mod:add_new_section("auto_fuse", "Magic items")
+
+local auto_fuse = mct_mod:add_new_option("auto_fuse_enabled", "checkbox")
+auto_fuse:set_text("Auto fuse button in the global pool")
+auto_fuse:set_tooltip_text("A button in the header of the global pool of magic items fuses unequipped items in pairs of the same rarity and category: common ones first, then uncommon ones, the new items included. Rare and unique items are kept.")
+auto_fuse:set_default_value(true)
+auto_fuse:set_is_global(true)
 
 mct_mod:add_new_section("debug", "Debug")
 

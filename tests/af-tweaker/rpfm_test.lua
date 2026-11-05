@@ -87,6 +87,18 @@ local function install_model(world)
             if expr == 'Key' then return id end
             return 'Name of ' .. id
         end
+        if context == 'CcoCampaignFaction' then
+            local items = world.items
+            if expr == 'AncillaryList.Size' then return #items end
+            local data = items[tonumber(string.match(expr, 'At%((%d+)%)')) + 1]
+            if has(expr, '^IsContextValid%(AncillaryList') then return not data.equipped end
+            local other = string.match(expr, '%.CanFuse%(AncillaryList%.At%((%d+)%)%)$')
+            if other then return data.level == items[tonumber(other) + 1].level end
+            if has(expr, '%.FrameState$') then return data.level end
+            if has(expr, '%.Category$') then return 'weapon' end
+            if has(expr, '%.Key$') or has(expr, '%.Name$') then return data.key end
+            error('item expression: ' .. expr)
+        end
         if context == 'CcoCampaignCharacter' then
             local index = tonumber(string.match(expr, '^SkillList%.At%((%d+)%)'))
             if expr == 'SkillPointsAvailable' then return world.points end
@@ -116,7 +128,21 @@ local function install_model(world)
         error('settlement expression: ' .. expr)
     end
     common.call_context_command = function(context, _, expr)
-        if context == 'CcoCampaignCharacter' then
+        if context == 'CcoCampaignFaction' then
+            local first, second = string.match(expr, '^AncillaryList%.At%((%d+)%)%.FuseForPlayer%(AncillaryList%.At%((%d+)%)%)$')
+            local pair = { world.items[tonumber(first) + 1], world.items[tonumber(second) + 1] }
+            -- Like the game and the vanilla listener of the event
+            cm:callback(function()
+                for _, data in ipairs(pair) do
+                    for i, other in ipairs(world.items) do
+                        if other == data then table.remove(world.items, i) break end
+                    end
+                end
+                world.fused = (world.fused or 0) + 1
+                rpfm.fire("AncillariesFused", { faction = player })
+                table.insert(world.items, { key = 'new' .. world.fused, level = pair[1].level == 'common' and 'uncommon' or 'rare' })
+            end, 0.1)
+        elseif context == 'CcoCampaignCharacter' then
             if expr == 'CommitSkillChoices' then
                 local skill = world.added
                 world.added = nil
@@ -197,6 +223,27 @@ rpfm.test("buildings", function()
     rpfm.assert_equal(world.queued[1], 'fav_pooled')
     rpfm.assert_equal(world.queued[2], 'fav_pooled2')
     rpfm.assert_equal(count(log_text(), 'auto build done'), 1)
+    rpfm.assert_equal(errors_text(), '')
+end)
+
+rpfm.test("auto fuse", function()
+    OVERRIDES.auto_upgrade_enabled = false
+    OVERRIDES.favorite_buildings_enabled = false
+    OVERRIDES.auto_skills_enabled = false
+    OVERRIDES.auto_fuse_enabled = true
+    local world = {
+        levels = {}, upgrades = {}, slots = {}, skills = {},
+        items = {
+            { key = 'u1', level = 'uncommon' }, { key = 'c1', level = 'common' },
+            { key = 'c2', level = 'common' }, { key = 'c3', level = 'common', equipped = true }
+        }
+    }
+    install_model(world)
+    rpfm.fire("ComponentLClickUp", { string = 'af_tweaker_auto_fuse_button' })
+    pump(60)
+    report('fuse')
+    rpfm.assert_equal(world.fused, 2)
+    rpfm.assert_equal(has_plain(log_text(), 'common pairs: 1, uncommon pairs: 1'), true)
     rpfm.assert_equal(errors_text(), '')
 end)
 

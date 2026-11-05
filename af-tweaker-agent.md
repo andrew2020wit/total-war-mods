@@ -214,6 +214,61 @@ Single-player only: the UI context objects used here aren't synchronized in mult
 the feature does nothing when `cm:is_multiplayer()` is true, and the UI polling that shows
 the buttons doesn't start.
 
+### Auto fuse of magic items
+
+On by default. A button in the header of the global pool of the character panel fuses the
+player's unequipped magic items in pairs, one pair per round (`round_delay`), only in the
+player's turn. Each round reads the list anew and fuses the first pair of the lowest level, so
+all common pairs go before the uncommon ones, and the uncommon items made from commons are
+fused too. Nothing above uncommon is fused.
+
+How the game fuses, read from the vanilla files on 2026-11-05:
+- The Fuse button of `ui/campaign ui/character_details_panel_details.twui.xml` (`ui3.pack`)
+  runs `FirstContext.FuseForPlayer(LastContext)` on the two ticked `CcoCampaignAncillary`
+  items and is active when `Size == 2 && FirstContext.CanFuse(LastContext)`. The checkbox of an
+  item is inactive when `IsLocalPlayersTurn == false || AncillaryRecordContext.CanBeDestroyed
+  == false`.
+- The game then sends the script event `AncillariesFused`, and the vanilla listener of
+  `script/campaign/wh3_campaign_item_fusing.lua` adds a random item of the next rarity and the
+  same category with `cm:add_ancillary_to_faction`. Commons give uncommons, uncommons give
+  rares, rares give a unique by chance or scrap.
+
+What the script does:
+- The items are `AncillaryList` of `CcoCampaignFaction`, whose id is the faction cqi, the same
+  call as in the vanilla `wh_campaign_interventions.lua`. Pairs are fused with
+  `AncillaryList.At(i).FuseForPlayer(AncillaryList.At(j))` on the faction context, so no
+  checkbox of the UI is ticked. Indices are read and used in the same round, while the list
+  can't change.
+- An item takes part when `IsContextValid(CharacterEquippedToContext) == false`, the same check
+  as the vanilla "Only show unequipped items" filter, plus `IsFusable`, `CanBeDestroyed` and the
+  category filter of the Magic Items tab (`IsHidden == false`, not `general`, not `mount`).
+- The level is `AncillaryRecordContext.FrameState`: the `ui_state` of the item's row in
+  `ancillary_uniqueness_groupings` (`common` 35-50, `uncommon` 80-100, `rare` 130-150,
+  `legendary` for unique and unique fusable, `crafted` for scrap, runes and crafted items), the
+  states of the vanilla item frame. Only `common` and `uncommon` are fused, so the Necronium
+  grimoire and tome (legendary) and the scrap of failed fusions (crafted) are never taken.
+- The category is `CategoryContext.Category`. Two items must have the same level and category,
+  and `CanFuse` must agree; a pair it refuses is skipped, and the next pair is tried.
+- A fusion counts as done when `AncillariesFused` comes for the player's faction. The new item
+  comes from the vanilla listener of the same event, so the next round reads the list only
+  when it has one item less than before the fusion, or after one more round. A fusion without
+  the event within `fuse_confirm_rounds` rounds stops the run with an error, and so does a list
+  that didn't get shorter: each round must take items, or the rounds might never end.
+- The run stops when the turn is over. The button is inactive while a run goes, and a click
+  during a run is ignored.
+
+The button:
+- `ui/templates/round_extra_small_button`, 30x30, in `global_pool > header`, docked to the
+  center right of the header (`SetDockingPoint(6)`, offset -6). The header is the 281x30 title
+  banner, its text is centered, so the right side is free. Other components of the panel are
+  named `header` too, so the header is taken as a direct child of `global_pool`.
+- The icon is `af_tweaker_auto_fuse.png`, 38x38 like the vanilla `icon_cross_small.png` of the
+  template, with the glyph of the vanilla `icon_merge.png` (the merging of units) scaled to 24
+  px and centered.
+- It's added and refreshed by the same UI poll as the stars, so it's never kept between polls.
+  With `auto_fuse_enabled` off it's hidden and clicks are ignored.
+- The sort direction button of the pool stays as it is: the header had room for a new button.
+
 ## Settings
 
 The settings window is provided by
@@ -227,6 +282,7 @@ defaults from the `settings` table in the script.
 | `min_treasury`         | slider   | `5000`  | Money the mod never touches                 |
 | `favorite_buildings_enabled` | checkbox | `true` | Builds favorite buildings; the list itself comes from the star button |
 | `auto_skills_enabled`  | checkbox | `true`  | Spends skill points and shows the priority buttons |
+| `auto_fuse_enabled`    | checkbox | `true`  | Shows the auto fuse button of the global pool |
 | `enable_logging`       | checkbox | `false` | Writes `!!af_tweaker.txt`                   |
 
 Values are read when they're needed through `get_finalized_setting()`, and MCT updates them
@@ -313,6 +369,15 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
+| Auto fuse: `FuseForPlayer` and `CanFuse` from the faction context, `IsFusable`, `FrameState` | Read from the vanilla layout; **not tested in the game** (0.7.0) |
+| Auto fuse: `AncillariesFused` after `FuseForPlayer` from a script, the new item in the next round | Read from the vanilla script; **not tested in the game** (0.7.0) |
+| Auto fuse button: place in the header, icon, inactive state during a run | **Not tested in the game** (0.7.0) |
+
+Next in-game check of the auto fuse: with a few unequipped common and uncommon items of the same
+category and some equipped ones, click the button and look at the log: one pair per line,
+commons first, then uncommons with the new ones, `auto fuse done` at the end, and nothing in the
+error log; check that the equipped items are still there and that the button sits to the right
+of the title of the pool.
 
 Next in-game check: click the star of a building through all four icons and look at the file;
 with a small budget, check in the log that three stars are built before one star; compare the
@@ -329,7 +394,8 @@ answers still needs a run in the game: see [Verification status](#verification-s
 them after changing the script, and extend them with the change.
 
 - `model_test.lua` runs the script against a small model of the game, UI included: rounds,
-  refused points, the choice of an upgrade, the buttons, multiplayer, work without MCT. It also
+  refused points, the choice of an upgrade, the order of fusions, the buttons, multiplayer, work
+  without MCT. It also
   checks the MCT file against the defaults and the version of the script. It needs any Lua 5.4.
   The one inside the VS Code Lua extension will do. Run it from the repository root, it prints
   `ALL PASSED` at the end:
@@ -354,6 +420,7 @@ mods/warhammer_3/af-tweaker/
   script/mct/settings/af_tweaker.lua      <- the settings window, loaded by MCT
   ui/skins/default/af_tweaker_favorite_priority_0..3.png  <- icons of the favorite button
   ui/skins/default/af_tweaker_skill_priority_0..3.png  <- icons of the skill priority button
+  ui/skins/default/af_tweaker_auto_fuse.png  <- icon of the auto fuse button
 mods/warhammer_3/af-tweaker.pack          <- packed, distributable mod (built with RPFM)
 af-tweaker-agent.md                       <- this file
 docs/af-tweaker-user-guide.md             <- guide for players

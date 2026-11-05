@@ -37,6 +37,9 @@ end
 -- world.upgrades is a key or a list of keys per level, world.chains the chains of the keys.
 -- The character is the world itself, or several are in world.heroes: { { cqi, points, skills, wounded } }.
 -- level_up_points of a character come with its next charged point.
+-- world.items are the magic items of the faction: { key, level, category, equipped, refuse }.
+-- The game fuses a pair world.fuse_delay rounds after the command, never with world.refuse_fusions,
+-- and the new item comes world.new_item_delay rounds after the event.
 local function start(world)
     local log_name = file_prefix .. 'log.txt'
     local err_name = file_prefix .. 'errors.txt'
@@ -109,6 +112,7 @@ local function start(world)
     end
     local faction = {
         name = function() return 'player' end,
+        command_queue_index = function() return 42 end,
         treasury = function() return world.treasury or 100000 end,
         region_list = function() return list(regions) end,
         character_list = function() return list(characters) end,
@@ -145,6 +149,79 @@ local function start(world)
         return key
     end
     local function level_info(key) return world.levels[key] or {} end
+
+    world.items = world.items or {}
+    world.fusions = {}
+    local pending_fusions = {}
+    local pending_items = {}
+    local next_level = { common = 'uncommon', uncommon = 'rare', rare = 'legendary' }
+
+    local function item_value(expr)
+        local items = world.items
+        local item = items[tonumber(expr:match('At%((%d+)%)')) + 1]
+        if expr:find('^IsContextValid%(AncillaryList%.At%(%d+%)%.CharacterEquippedToContext%) == false && ') then
+            assert(expr:find('IsFusable', 1, true) and expr:find('CanBeDestroyed', 1, true), expr)
+            return not item.equipped and item.category ~= 'general' and item.category ~= 'mount'
+        end
+        local other = expr:match('%.CanFuse%(AncillaryList%.At%((%d+)%)%)$')
+        if other then
+            local second = items[tonumber(other) + 1]
+            return item.level == second.level and not item.refuse and not second.refuse
+        end
+        if expr:find('%.AncillaryRecordContext%.FrameState$') then return item.level end
+        if expr:find('%.CategoryContext%.Category$') then return item.category end
+        if expr:find('%.AncillaryRecordContext%.Key$') then return item.key end
+        if expr:find('%.Name$') then return item.key .. ' name' end
+        error('item expression: ' .. expr)
+    end
+
+    local function remove_item(item)
+        for i, other in ipairs(world.items) do
+            if other == item then
+                table.remove(world.items, i)
+                return
+            end
+        end
+    end
+
+    -- Like the game and the vanilla listener of AncillariesFused
+    local function apply_fusions()
+        for i = #pending_items, 1, -1 do
+            local pending = pending_items[i]
+            if pending.rounds == 0 then
+                table.remove(pending_items, i)
+                table.insert(world.items, pending.item)
+            else
+                pending.rounds = pending.rounds - 1
+            end
+        end
+
+        for i = #pending_fusions, 1, -1 do
+            local fusion = pending_fusions[i]
+            if fusion.rounds == 0 then
+                table.remove(pending_fusions, i)
+                remove_item(fusion.first)
+                remove_item(fusion.second)
+                table.insert(world.fusions, fusion.first.key .. '+' .. fusion.second.key)
+                local context = { faction = function() return faction end }
+                local listener = listeners.AfTweakerAncillariesFused
+                if listener.cond(context) then listener.handler(context) end
+                local item = {
+                    key = 'new_' .. #world.fusions,
+                    level = next_level[fusion.first.level],
+                    category = fusion.first.category
+                }
+                local delay = world.new_item_delay or 0
+                if delay == 0 then
+                    table.insert(world.items, item)
+                else
+                    table.insert(pending_items, { rounds = delay - 1, item = item })
+                end
+            else
+                fusion.rounds = fusion.rounds - 1
+            end
+        end
+    end
     local function cap_key(key, cqi)
         local cap = world.caps and world.caps[key]
         return cap and cap.per_province and (key .. ':' .. region_of_cqi[cqi].province) or key
@@ -162,6 +239,12 @@ local function start(world)
             })[key] or ''
         end,
         get_context_value = function(context, id, expr)
+            if context == 'CcoCampaignFaction' then
+                assert(id == 42, 'the faction cqi: ' .. tostring(id))
+                if expr == 'AncillaryList.Size' then return #world.items end
+                return item_value(expr)
+            end
+
             if context == 'CcoBuildingLevelRecord' then
                 if expr == 'Key' then return id end
                 return 'Name of ' .. id
@@ -215,7 +298,17 @@ local function start(world)
         end,
         call_context_command = function(context, id, expr)
             table.insert(commands, expr)
-            if context == 'CcoCampaignCharacter' then
+            if context == 'CcoCampaignFaction' then
+                local first, second = expr:match('^AncillaryList%.At%((%d+)%)%.FuseForPlayer%(AncillaryList%.At%((%d+)%)%)$')
+                assert(first, 'fuse command: ' .. expr)
+                if not world.refuse_fusions then
+                    table.insert(pending_fusions, {
+                        rounds = world.fuse_delay or 0,
+                        first = world.items[tonumber(first) + 1],
+                        second = world.items[tonumber(second) + 1]
+                    })
+                end
+            elseif context == 'CcoCampaignCharacter' then
                 local hero = hero_of_cqi[id]
                 if expr == 'CommitSkillChoices' then
                     local pending = hero.added
@@ -264,11 +357,7 @@ local function start(world)
 
     local game = { polls = polls, commands = commands, listeners = listeners, size_queries = size_queries }
 
-    function game.turn()
-        apply_commits()
-        listeners.AfTweakerAutoUpgrade.handler({
-            faction = function() return faction end
-        })
+    function game.run_timers()
         local steps = 0
         while #timers > 0 do
             steps = steps + 1
@@ -277,10 +366,32 @@ local function start(world)
             timers = {}
             world.round = steps
             apply_commits()
+            apply_fusions()
             for _, f in ipairs(batch) do f() end
         end
         apply_commits()
+        apply_fusions()
         game.steps = steps
+    end
+
+    function game.turn()
+        apply_commits()
+        listeners.AfTweakerAutoUpgrade.handler({
+            faction = function() return faction end
+        })
+        game.run_timers()
+    end
+
+    -- The first round runs in the click itself
+    function game.click_fuse()
+        local listener = listeners.AfTweakerAutoFuseButton
+        local context = { string = 'af_tweaker_auto_fuse_button' }
+        if listener.cond(context) then listener.handler(context) end
+    end
+
+    function game.fuse()
+        game.click_fuse()
+        game.run_timers()
     end
 
     function game.log() return read_file(log_name) end
@@ -791,7 +902,7 @@ do
     world.find_child = function() error('boom') end
     local game = start(world)
     for _ = 1, 30 do game.polls[1]() end
-    check('a failing step stops after the limit', count(game.errors(), 'poll_ui') == 20, count(game.errors(), 'poll_ui'))
+    check('a failing step stops after the limit', count(game.errors(), 'poll_ui') == 30, count(game.errors(), 'poll_ui'))
 end
 
 do
@@ -805,7 +916,8 @@ do
     end
     local game = start(world)
     for _ = 1, 100 do game.polls[1]() end
-    check('failures with successes in between do not stop a step', count(game.errors(), 'poll_ui') == 100, count(game.errors(), 'poll_ui'))
+    -- Three steps take 300 calls, and every other pair of them fails
+    check('failures with successes in between do not stop a step', count(game.errors(), 'poll_ui') == 150, count(game.errors(), 'poll_ui'))
 end
 
 -- A small UI tree
@@ -832,6 +944,8 @@ function ui:SetDockingPoint() end
 function ui:SetDockOffset() end
 function ui:Layout() end
 function ui:IsMouseOverChildren() return self.hovered == true end
+function ui:CurrentState() return self.state or 'active' end
+function ui:SetState(state) self.state = state end
 function ui:GetContextObjectId() return self.context_id or '' end
 function ui:Find(what)
     if type(what) == 'number' then return self.children[what + 1] end
@@ -850,6 +964,10 @@ local function ui_world(settings)
     local skills = node('character_details_panel_skills', parent)
     local chain = node('chain', node('chain1', node('list_box', skills)))
     local card = node('card', node('skill_key', node('module_skill_key', chain)))
+    local equipment = node('equipment_holder', parent)
+    local other_header = node('header', node('ancillary_parent', equipment))
+    local global_pool = node('global_pool', equipment)
+    local pool_header = node('header', global_pool)
     local settlement_panel = node('settlement_panel', root)
     local slots = node('default_slots_list', node('settlement', node('settlement_list', settlement_panel)))
     local slot = node('slot', slots)
@@ -860,6 +978,9 @@ local function ui_world(settings)
         settings = settings,
         root = root,
         card = card,
+        global_pool = global_pool,
+        pool_header = pool_header,
+        other_header = other_header,
         slot = slot,
         slots_list = slots,
         options_list = options_list,
@@ -1002,6 +1123,139 @@ do
     check('a star without a slot is logged', game.errors():find('building not found', 1, true) ~= nil, game.errors())
 end
 
+-- Auto fuse
+local function fuse_world(items, settings)
+    local world = ui_world(settings or { auto_fuse_enabled = true })
+    world.items = items
+    return world
+end
+
+local function item(key, level, category, extra)
+    local result = { key = key, level = level, category = category or 'weapon' }
+    for name, value in pairs(extra or {}) do result[name] = value end
+    return result
+end
+
+local function item_keys(world)
+    local keys = {}
+    for _, data in ipairs(world.items) do table.insert(keys, data.key) end
+    table.sort(keys)
+    return table.concat(keys, ' ')
+end
+
+local function fusions(world)
+    return table.concat(world.fusions, ' ')
+end
+
+do
+    local world = fuse_world({
+        item('u1', 'uncommon'),
+        item('c1', 'common'),
+        item('c2', 'common'),
+        item('c3', 'common'),
+        item('a1', 'common', 'armour'),
+        item('a2', 'common', 'armour', { equipped = true }),
+        item('r1', 'rare'),
+        item('r2', 'rare'),
+        item('f1', 'common', 'general'),
+        item('f2', 'common', 'general'),
+        item('x1', 'crafted', 'enchanted_item'),
+        item('x2', 'crafted', 'enchanted_item')
+    })
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: common pairs first, then uncommon ones with the new items', fusions(world) == 'c1+c2 u1+new_1', fusions(world))
+    check('auto fuse: equipped, rare, crafted items and followers are kept',
+        item_keys(world) == 'a1 a2 c3 f1 f2 new_2 r1 r2 x1 x2', item_keys(world))
+    check('auto fuse: one fusion per round', game.steps == 2, game.steps)
+    check('auto fuse: the log', game.log():find('auto fuse done, common pairs: 1, uncommon pairs: 1', 1, true) ~= nil, game.log())
+    check('auto fuse: no errors', game.errors() == '', game.errors())
+
+    game.fuse()
+    check('auto fuse: a second click finds nothing',
+        #world.fusions == 2 and game.log():find('common pairs: 0, uncommon pairs: 0', 1, true) ~= nil, game.log())
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common'), item('u1', 'uncommon') })
+    world.fuse_delay = 2
+    world.new_item_delay = 1
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: a slow game and a late new item', fusions(world) == 'c1+c2 u1+new_1', fusions(world))
+    check('auto fuse: a slow game is no error', game.errors() == '', game.errors())
+end
+
+do
+    local world = fuse_world({ item('c1', 'common', 'weapon', { refuse = true }), item('c2', 'common'), item('c3', 'common') })
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: a pair the game refuses is skipped', fusions(world) == 'c2+c3', fusions(world))
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') })
+    world.refuse_fusions = true
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: a fusion that never comes stops the run',
+        #game.commands == 1 and game.errors():find('did not fuse common: c1 name (c1) + c2 name (c2)', 1, true) ~= nil, game.errors())
+    world.refuse_fusions = false
+    game.fuse()
+    check('auto fuse: a new click works after that', fusions(world) == 'c1+c2', fusions(world))
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common'), item('c3', 'common'), item('c4', 'common') })
+    world.fuse_delay = 1
+    local game = start(world)
+    game.click_fuse()
+    world.turn_over = true
+    game.run_timers()
+    check('auto fuse: the run stops when the turn ends',
+        #game.commands == 1 and game.log():find('auto fuse stopped', 1, true) ~= nil, game.log())
+
+    game.fuse()
+    check('auto fuse: no fusion out of the turn', #game.commands == 1, #game.commands)
+end
+
+do
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') }, { auto_fuse_enabled = false })
+    local game = start(world)
+    game.fuse()
+    check('auto fuse: no fusion with the option off', #game.commands == 0, #game.commands)
+end
+
+do
+    local settings = { auto_fuse_enabled = true }
+    local world = fuse_world({ item('c1', 'common'), item('c2', 'common') }, settings)
+    world.fuse_delay = 1
+    local game = start(world)
+    game.polls[1]()
+    local button = world.pool_header:Find('af_tweaker_auto_fuse_button')
+    check('the fuse button appears in the header of the pool', button ~= nil and button.visible)
+    check('the fuse button is not in another header', world.other_header:Find('af_tweaker_auto_fuse_button') == nil)
+    check('the fuse button has its icon', button.images[1] == 'ui/skins/default/af_tweaker_auto_fuse.png', button.images[1])
+    check('the fuse button has a tooltip for all states', button.tooltip_all_states == true)
+
+    game.click_fuse()
+    game.polls[1]()
+    check('the fuse button is inactive during a run', button:CurrentState() == 'inactive', button:CurrentState())
+    game.click_fuse()
+    check('a click during a run starts nothing', #game.commands == 1, #game.commands)
+    game.run_timers()
+    game.polls[1]()
+    check('the fuse button is active after the run', button:CurrentState() == 'active', button:CurrentState())
+
+    settings.auto_fuse_enabled = false
+    game.polls[1]()
+    check('the option off hides the fuse button', not button.visible)
+    settings.auto_fuse_enabled = true
+    game.polls[1]()
+    check('the option on shows the fuse button again', button.visible)
+    check('the fuse button: no errors', game.errors() == '', game.errors())
+end
+
 -- Settings: the MCT file against the defaults of the script
 do
     local mct_source = read_file('mods/warhammer_3/af-tweaker/script/mct/settings/af_tweaker.lua')
@@ -1035,7 +1289,10 @@ do
     assert(load(mct_source, 'af_tweaker_mct', 't', env))()
 
     -- The timings and the limits aren't settings of the player
-    local internal = { turn_start_delay = true, round_delay = true, skill_commit_rounds = true, ui_poll_ms = true, ui_poll_max_failures = true }
+    local internal = {
+        turn_start_delay = true, round_delay = true, skill_commit_rounds = true, fuse_confirm_rounds = true,
+        ui_poll_ms = true, ui_poll_max_failures = true
+    }
     local defaults = {}
 
     for key, value in mod_source:match('local settings = (%b{})'):gmatch('([%w_]+) = ([%w%.]+)') do
