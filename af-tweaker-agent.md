@@ -369,15 +369,14 @@ breaks after a game patch: `ui/campaign ui/settlement_building_slot.twui.xml`,
 | Priority button: the card hierarchy                                  | Read from the script log; 0.4.0 and 0.4.1 stopped one level too early |
 | Priority button: shown on the cards, clicks saved to the file        | Works since 0.4.2              |
 | Skill keys of the cards equal to `SkillList` keys                    | Yes: priority 3 applied first in that cycle |
-| Auto fuse: `FuseForPlayer` and `CanFuse` from the faction context, `IsFusable`, `FrameState` | Read from the vanilla layout; **not tested in the game** (0.7.0) |
-| Auto fuse: `AncillariesFused` after `FuseForPlayer` from a script, the new item in the next round | Read from the vanilla script; **not tested in the game** (0.7.0) |
-| Auto fuse button: place in the header, icon, inactive state during a run | **Not tested in the game** (0.7.0) |
+| Auto fuse: `FuseForPlayer` and `CanFuse` from the faction context, `IsFusable`, `FrameState` | Work in 0.7.0: 5 common and 3 uncommon pairs on turn 50 of a Vampire Counts campaign, each of the same category, no errors |
+| Auto fuse: `AncillariesFused` after `FuseForPlayer` from a script, the new item in the next round | Works in 0.7.0: the vanilla listener logged all 8 fusions, and 2 of the 3 uncommon pairs used items it had just spawned (Nightshroud, Ogre Blade); about 0.7 s per pair, no popups |
+| Auto fuse button in `global_pool > header`                           | Works in 0.7.0: the `[ui]` line of the click shows that path and 30x30 |
+| Auto fuse: equipped items are kept, the button doesn't cover the title, its inactive state | **Not confirmed yet**: the logs don't show them |
 
-Next in-game check of the auto fuse: with a few unequipped common and uncommon items of the same
-category and some equipped ones, click the button and look at the log: one pair per line,
-commons first, then uncommons with the new ones, `auto fuse done` at the end, and nothing in the
-error log; check that the equipped items are still there and that the button sits to the right
-of the title of the pool.
+Next in-game check of the auto fuse: with a common or uncommon item equipped on a character and
+a free item of the same rarity and category, click the button and check that the equipped one
+is still on the character; look where the button sits next to the title of the pool.
 
 Next in-game check: click the star of a building through all four icons and look at the file;
 with a small budget, check in the log that three stars are built before one star; compare the
