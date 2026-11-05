@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.5.0'
+local mod_version = '9.6.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -84,11 +84,11 @@ local function log(text)
     file:close()
 end
 
--- The values of the dropdown are strings, '0.1' to '5'
+-- The values of the dropdown are strings, '0' to '5'. 0 turns all the bonuses of the culture off
 local function get_bonus_multiplier(culture)
     local multiplier = tonumber(get_setting('bonus_multiplier_' .. culture))
 
-    if not multiplier or multiplier <= 0 then
+    if not multiplier or multiplier < 0 then
         return default_bonus_multiplier
     end
 
@@ -268,14 +268,23 @@ local function help_ai_each_turn(context)
 
     local culture = current_faction:culture()
 
-    -- The culture of the player gets no bonuses, whatever the settings
+    -- The culture of the player gets no bonuses, whatever the settings. The bundle it got from an
+    -- older version goes at once, not when it runs out
     if culture == player_faction:culture() then
         log('no bonuses for the culture of the player, faction: ' .. current_faction_name)
+        remove_all_effect_bundles(current_faction_name)
         return
     end
 
     -- For the gold, the character experience and the unit experience, not for the effect bundle
     local bonus_multiplier = get_bonus_multiplier(culture)
+
+    -- 0 turns off all the bonuses of the culture, the effect bundle included
+    if bonus_multiplier == 0 then
+        log('no bonuses for the culture, its multiplier is 0, faction: ' .. current_faction_name)
+        remove_all_effect_bundles(current_faction_name)
+        return
+    end
 
     local player_regions_number = player_faction:region_list():num_items()
 
@@ -284,13 +293,16 @@ local function help_ai_each_turn(context)
 
     local ai_income = current_faction:income()
 
-    local gold_bonus = (region_multiplier + time_multiplier) * ai_income * bonus_multiplier
+    -- A share of the income: a faction with a negative income gets nothing instead of losing gold
+    local gold_bonus = math.max(0, (region_multiplier + time_multiplier) * ai_income * bonus_multiplier)
 
     local is_logging = is_logging_enabled()
     local debug_treasury_before = is_logging and current_faction:treasury()
 
     -- Add money
-    cm:treasury_mod(current_faction_name, gold_bonus)
+    if gold_bonus > 0 then
+        cm:treasury_mod(current_faction_name, gold_bonus)
+    end
 
     if is_logging then
         log('=========== gold_bonus ===============\n' ..

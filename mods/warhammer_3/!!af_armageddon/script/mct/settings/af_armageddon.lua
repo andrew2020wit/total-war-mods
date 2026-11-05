@@ -4,7 +4,7 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.5.0'
+local mod_version = '9.6.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
@@ -108,8 +108,8 @@ local cultures = {
     "wh_dlc05_wef_wood_elves",
 }
 
--- The keys of the dropdown are strings, the script turns them into numbers
-local bonus_multipliers = { "0.1", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2", "3", "4", "5" }
+-- The keys of the dropdown are strings, the script turns them into numbers. 0 turns the bonuses off
+local bonus_multipliers = { "0", "0.1", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2", "3", "4", "5" }
 local bonus_multiplier_values = {}
 
 for _, multiplier in ipairs(bonus_multipliers) do
@@ -125,7 +125,7 @@ for _, culture in ipairs(cultures) do
     local bonus_multiplier = mct_mod:add_new_option("bonus_multiplier_" .. culture, "dropdown")
     -- A loc key of the game: MCT shows the name in the language of the game
     bonus_multiplier:set_text("cultures_name_" .. culture)
-    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change. The culture of the player gets no bonuses, whatever this value.")
+    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change. 0 turns off all the bonuses of this culture, the effect bundle included. The culture of the player gets no bonuses, whatever this value.")
     bonus_multiplier:add_dropdown_values(bonus_multiplier_values)
     -- Each campaign has its own values: MCT keeps them in the save
     bonus_multiplier:set_is_global(false)

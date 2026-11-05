@@ -11,7 +11,7 @@ goes on:
 
 Every AI faction of another culture than yours gets them: alliances, vassals and wars change
 nothing. The AI factions of your own culture and the rebels never get them. In the settings you
-can make the bonuses smaller or bigger for each culture.
+can make the bonuses smaller or bigger for each culture, or turn them off for it.
 
 ## Installation
 
@@ -41,25 +41,30 @@ the right one the log and the bonus multipliers of the cultures.
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Every n-th turn | 2 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50. Divided by the bonus multiplier of the culture |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
-| Bonus multiplier for cultures | One list for each culture | 1 | 0.1 to 5: makes the gold and the experience of this culture smaller or bigger |
+| Bonus multiplier for cultures | One list for each culture | 1 | 0 to 5: makes the gold and the experience of this culture smaller or bigger, 0 turns its bonuses off |
 
 The settings are the same for all your campaigns, except the bonus multipliers. A change takes
 effect from the next turn of an AI faction.
+
+MCT remembers the values it has saved, even the default ones. If you played a version older
+than 9.4.0 with MCT, **Every n-th turn** may still be 1, the old default: MCT then shows the
+revert button next to it. Set it to 2 to get the new default, or keep 1 if you like it.
 
 ### Your own culture
 
 The AI factions of your culture never get the bonuses, whatever the settings. Its multiplier is
 on the list too, as the main menu doesn't know which culture you'll play, but it changes
-nothing. All other cultures always get the bonuses.
+nothing. All other cultures get the bonuses, unless you set their multiplier to 0.
 
 ### Bonus multiplier for cultures
 
 The last section lists the cultures of the game and its DLCs. It's long, so scroll the right
 column of the window to see all of them.
 
-Each culture has a multiplier: 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 or 5. The open
-list shows the values up to 2: scroll it down to see 3, 4 and 5. With the default 1 the culture
-gets the bonuses as they are. The multiplier changes:
+Each culture has a multiplier: 0, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 or 5. The
+open list doesn't show all the values at once: scroll it down to see the biggest ones. With the
+default 1 the culture gets the bonuses as they are, and with 0 it gets none of them, the effect
+bundle included. Any other value changes:
 
 - the gold: multiplied by it;
 - the character experience: multiplied by it;
@@ -69,7 +74,8 @@ gets the bonuses as they are. The multiplier changes:
   turn.
 
 The effect bundle stays the same, and so do the start turns. To weaken a culture as much as
-possible, give it 0.1.
+possible but still let it grow, give it 0.1. To leave it as it is in the game, for example your
+allies, give it 0: its factions lose their effect bundle on their next turn.
 
 Each campaign has its own multipliers. A change made in a campaign applies to that campaign
 only. In the main menu it applies to the next campaign you start, not to the ones already
@@ -91,6 +97,9 @@ default settings, on turn 44 with 61 regions the share is 44 × 2% + 61 × 4% = 
 with an income of 6,691 gets 22,214 gold on that turn. With the multiplier 0.5 its culture would
 get half of that, 11,107.
 
+A faction whose income is negative, for example because of its upkeep, gets no gold that turn.
+The mod never takes gold away.
+
 ### Character experience
 
 From the start turn, on each of its turns every character of the faction gets the turn number
@@ -108,8 +117,8 @@ culture divides it, see [Bonus multiplier for cultures](#bonus-multiplier-for-cu
 
 ### Effect bundle
 
-This bonus has no settings, and the bonus multiplier doesn't change it. Each faction has one
-bundle at a time, the one of the current turn:
+This bonus has no settings, and the bonus multiplier doesn't change it, except 0, which takes
+it away. Each faction has one bundle at a time, the one of the current turn:
 
 | From turn | Research rate | Local recruitment capacity | Growth |
 |---:|---:|---:|---:|
@@ -120,8 +129,8 @@ bundle at a time, the one of the current turn:
 | 40 | +200 | +10 | +100 |
 
 Research applies to the faction, recruitment and growth to each of its provinces. The bundle
-lasts two turns and is renewed every turn, so when a faction stops getting the bonuses it
-loses the bundle soon after.
+lasts two turns and is renewed every turn. A faction of your culture or of a culture with the
+multiplier 0 loses it at the start of its next turn.
 
 ## Compatibility with other mods
 
@@ -138,7 +147,7 @@ Balance depends on many things: mods, factions, random events, your skills and y
 you can expect is that the difficulty gradually grows.
 
 If it's too hard, lower the two gold percents, move the start turns later or lower the
-multipliers of the strongest cultures, down to 0.1. If it's too easy, raise the percents, move
+multipliers of the strongest cultures, down to 0. If it's too easy, raise the percents, move
 the start turns earlier or raise the multipliers, up to 5.
 
 ## Good to know

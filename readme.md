@@ -7,7 +7,8 @@
 "Armageddon" modification increases difficulty for the middle and late game.
 
 All AI factions of other cultures than yours get various bonuses. You can make them smaller or
-bigger for each culture. The AI factions of your own culture never get them.
+bigger for each culture, or turn them off for it. The AI factions of your own culture never get
+them.
 
 ### Compatibility
 
@@ -29,8 +30,9 @@ the cultures are set for each campaign.
 - character experience: the amount and the start turn;
 - unit experience: the start turn and the turn interval;
 - a log file;
-- a bonus multiplier for each culture, 0.1 to 5: it multiplies the gold and the character
-  experience and divides the interval of the unit experience.
+- a bonus multiplier for each culture, 0 to 5: it multiplies the gold and the character
+  experience and divides the interval of the unit experience, and 0 turns off all the bonuses
+  of the culture.
 
 ### About balance
 

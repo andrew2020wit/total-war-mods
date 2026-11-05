@@ -89,8 +89,10 @@ local function read_script_defaults()
 end
 
 -- world: { settings, changes, no_mct, no_mct_mod, is_mp, other_is_local, last_turn, ai_is_human, ai_is_rebel,
--- ai_culture, player_culture, other_culture, player_regions, rank, no_general, null_unit, faction_turns }
+-- ai_culture, player_culture, other_culture, player_regions, rank, no_general, null_unit, faction_turns,
+-- income, bundles_before }
 -- The AI is of the greenskins, the player of the empire and the other human player of the dwarfs by default.
+-- The income of the AI is 1000 by default, bundles_before are the keys of its bundles before turn 1.
 -- settings are the values of the MCT options, changes are the same by the turn they're saved on.
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
 -- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
@@ -106,6 +108,7 @@ local function play(world)
     local gold_count = 0
     local last_gold = 0
     local bundles, active_bundles = {}, {}
+    for _, key in ipairs(world.bundles_before or {}) do active_bundles[key] = true end
     local rank_reads = 0
     local first_tick
     local env = setmetatable({}, { __index = _G })
@@ -175,7 +178,7 @@ local function play(world)
         is_rebel = function() return world.ai_is_rebel == true end,
         is_human = function() return world.ai_is_human == true end,
         culture = function() return world.ai_culture or 'wh_main_grn_greenskins' end,
-        income = function() return 1000 end,
+        income = function() return world.income or 1000 end,
         treasury = function() return 0 end,
         military_force_list = function() return list({ force }) end,
         character_list = function() return list({ character }) end,
@@ -365,6 +368,27 @@ do
     check('the log has the faction of the culture of the player',
         logged.log:find('no bonuses for the culture of the player, faction: ai', 1, true) ~= nil, logged.log)
 
+    local old_bundle = { 'af_armageddon_effect_bundle_ai_buff_1' }
+    local player_bundle = play({ ai_culture = player_culture, bundles_before = old_bundle, last_turn = 1 })
+    check('the culture of the player loses a bundle of an older version',
+        next(player_bundle.active_bundles) == nil, next(player_bundle.active_bundles))
+
+    local greenskins_off = { bonus_multiplier_wh_main_grn_greenskins = '0' }
+
+    check_no_bonuses('a culture with the multiplier 0 gets nothing', { settings = greenskins_off, last_turn = 10 })
+
+    local turned_off = play({ changes = { [11] = greenskins_off }, last_turn = 12 })
+    check('the multiplier 0 during the campaign removes the bundle at once',
+        next(turned_off.active_bundles) == nil and turned_off.bundles[11] == nil and turned_off.gold_count == 10,
+        tostring(next(turned_off.active_bundles)) .. ', gold: ' .. turned_off.gold_count)
+
+    local other_on = play({ settings = { bonus_multiplier_wh_main_dwf_dwarfs = '0' }, last_turn = 3 })
+    check('the multiplier 0 of another culture changes nothing', other_on.gold_count == 3, other_on.gold_count)
+
+    local logged_off = play({ settings = { enable_logging = true, bonus_multiplier_wh_main_grn_greenskins = '0' }, last_turn = 1 })
+    check('the log has the faction of a culture with the multiplier 0',
+        logged_off.log:find('no bonuses for the culture, its multiplier is 0, faction: ai', 1, true) ~= nil, logged_off.log)
+
     local result = play({ last_turn = 10 })
     check('an AI faction gets gold every turn', result.gold_count == 10, result.gold_count)
     check('an AI faction gets unit experience', result.xp_turns == '10', result.xp_turns)
@@ -419,6 +443,18 @@ do
     check('regions_percent comes from MCT',
         gold({ settings = { regions_percent = 10 }, last_turn = 1, player_regions = 2 }) == 220,
         gold({ settings = { regions_percent = 10 }, last_turn = 1, player_regions = 2 }))
+
+    local in_debt = play({ income = -1000, last_turn = 3, player_regions = 2 })
+    check('a negative income gives no gold and takes none', in_debt.gold_count == 0, in_debt.last_gold)
+
+    local in_debt_late = play({ income = -1000, last_turn = 10, settings = { bonus_multiplier_wh_main_grn_greenskins = '5' } })
+    check('a negative income gives no gold with a big multiplier', in_debt_late.gold_count == 0, in_debt_late.last_gold)
+    check('a negative income keeps the other bonuses',
+        in_debt_late.character_xp == '10:10000' and in_debt_late.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1',
+        in_debt_late.character_xp)
+
+    local no_income = play({ income = 0, last_turn = 2 })
+    check('no income gives no gold', no_income.gold_count == 0, no_income.gold_count)
 end
 
 print('-- bonus multiplier')
@@ -459,6 +495,7 @@ do
     check_gold('gold: without MCT 1', { no_mct = true, last_turn = 1 }, 20)
     check_gold('gold: multiplayer gets 1', { is_mp = true, settings = greenskins('2'), last_turn = 1 }, 20)
     check_gold('gold: a value that is not a number counts as 1', { settings = greenskins('x'), last_turn = 1 }, 20)
+    check_gold('gold: a negative value counts as 1', { settings = greenskins('-1'), last_turn = 1 }, 20)
     check_gold('gold: a change applies from the next turn',
         { changes = { [3] = greenskins('2') }, last_turn = 3 }, 120)
 
@@ -545,7 +582,7 @@ do
     end
 
     local multiplier_options = 0
-    local multiplier_values = '0.1,0.25,0.5,0.75,1,1.25,1.5,1.75,2,3,4,5'
+    local multiplier_values = '0,0.1,0.25,0.5,0.75,1,1.25,1.5,1.75,2,3,4,5'
 
     for key, option in pairs(mct_options) do
         local multiplier_culture = key:match('^bonus_multiplier_(.+)')
