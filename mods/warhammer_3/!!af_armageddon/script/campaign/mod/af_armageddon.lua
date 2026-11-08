@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.6.0'
+local mod_version = '9.7.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -262,22 +262,10 @@ local function help_ai_each_turn(context)
         return
     end
 
-    -- Not the local faction: in multiplayer it's different on each machine, a desync again
-    local player_faction_name = cm:get_human_factions()[1]
-    local player_faction = cm:get_faction(player_faction_name)
-
-    local culture = current_faction:culture()
-
-    -- The culture of the player gets no bonuses, whatever the settings. The bundle it got from an
-    -- older version goes at once, not when it runs out
-    if culture == player_faction:culture() then
-        log('no bonuses for the culture of the player, faction: ' .. current_faction_name)
-        remove_all_effect_bundles(current_faction_name)
-        return
-    end
-
-    -- For the gold, the character experience and the unit experience, not for the effect bundle
-    local bonus_multiplier = get_bonus_multiplier(culture)
+    -- Every culture by its own multiplier, the culture of the player too: only the player itself
+    -- gets nothing. For the gold, the character experience and the unit experience, not for the
+    -- effect bundle
+    local bonus_multiplier = get_bonus_multiplier(current_faction:culture())
 
     -- 0 turns off all the bonuses of the culture, the effect bundle included
     if bonus_multiplier == 0 then
@@ -286,6 +274,8 @@ local function help_ai_each_turn(context)
         return
     end
 
+    -- Not the local faction: in multiplayer it's different on each machine, a desync again
+    local player_faction = cm:get_faction(cm:get_human_factions()[1])
     local player_regions_number = player_faction:region_list():num_items()
 
     local time_multiplier = get_setting('time_percent') * current_turn / 100

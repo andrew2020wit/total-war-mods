@@ -6,9 +6,8 @@
 
 "Armageddon" modification increases difficulty for the middle and late game.
 
-All AI factions of other cultures than yours get various bonuses. You can make them smaller or
-bigger for each culture, or turn them off for it. The AI factions of your own culture never get
-them.
+All AI factions get various bonuses, the ones of your own culture too. You can make them
+smaller or bigger for each culture, or turn them off for it.
 
 ### Compatibility
 

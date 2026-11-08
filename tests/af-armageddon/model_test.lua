@@ -334,21 +334,44 @@ do
 
     local player_culture = 'wh_main_emp_empire'
 
-    check_no_bonuses('the culture of the player gets nothing', { ai_culture = player_culture, last_turn = 10 })
-    check_no_bonuses('the culture of the player gets nothing, whatever its multiplier', {
-        settings = { bonus_multiplier_wh_main_emp_empire = '5' },
+    local same = play({ ai_culture = player_culture, last_turn = 10 })
+    check('the culture of the player gets all the bonuses',
+        same.gold_count == 10 and same.xp_turns == '10' and same.character_xp == '10:2000'
+        and same.bundles[10] == 'af_armageddon_effect_bundle_ai_buff_1',
+        same.gold_count .. ', ' .. same.xp_turns .. ', ' .. same.character_xp)
+
+    local same_gold = play({
+        settings = { bonus_multiplier_wh_main_emp_empire = '2' },
+        ai_culture = player_culture,
+        last_turn = 1,
+        player_regions = 2
+    })
+    check('the culture of the player gets its own multiplier',
+        math.floor(same_gold.last_gold + 0.5) == 200, same_gold.last_gold)
+
+    local same_other_multiplier = play({
+        settings = { bonus_multiplier_wh_main_grn_greenskins = '2' },
+        ai_culture = player_culture,
+        last_turn = 1
+    })
+    check('the culture of the player: the multiplier of another culture changes nothing',
+        math.floor(same_other_multiplier.last_gold + 0.5) == 20, same_other_multiplier.last_gold)
+
+    check_no_bonuses('the culture of the player with the multiplier 0 gets nothing', {
+        settings = { bonus_multiplier_wh_main_emp_empire = '0' },
         ai_culture = player_culture,
         last_turn = 10
     })
-    check_no_bonuses('the culture of the player from another mod gets nothing', {
-        ai_culture = 'unknown_culture',
-        player_culture = 'unknown_culture',
-        last_turn = 10
-    })
-    check_no_bonuses('without MCT the culture of the player gets nothing',
-        { no_mct = true, ai_culture = player_culture, last_turn = 10 })
-    check_no_bonuses('multiplayer: the culture of the first player gets nothing on each machine',
-        { is_mp = true, other_is_local = true, ai_culture = player_culture, last_turn = 10 })
+
+    local same_unknown = play({ ai_culture = 'unknown_culture', player_culture = 'unknown_culture', last_turn = 3 })
+    check('the culture of the player from another mod gets the bonuses', same_unknown.gold_count == 3,
+        same_unknown.gold_count)
+
+    local same_no_mct = play({ no_mct = true, ai_culture = player_culture, last_turn = 3 })
+    check('without MCT the culture of the player gets the bonuses', same_no_mct.gold_count == 3, same_no_mct.gold_count)
+
+    local same_mp = play({ is_mp = true, other_is_local = true, ai_culture = player_culture, last_turn = 3 })
+    check('multiplayer: the culture of the first player gets the bonuses', same_mp.gold_count == 3, same_mp.gold_count)
 
     local other = play({ last_turn = 3 })
     check('another culture gets the bonuses', other.gold_count == 3, other.gold_count)
@@ -365,13 +388,9 @@ do
         multiplayer.gold_count == 3, multiplayer.gold_count)
 
     local logged = play({ settings = { enable_logging = true }, ai_culture = player_culture, last_turn = 1 })
-    check('the log has the faction of the culture of the player',
-        logged.log:find('no bonuses for the culture of the player, faction: ai', 1, true) ~= nil, logged.log)
-
-    local old_bundle = { 'af_armageddon_effect_bundle_ai_buff_1' }
-    local player_bundle = play({ ai_culture = player_culture, bundles_before = old_bundle, last_turn = 1 })
-    check('the culture of the player loses a bundle of an older version',
-        next(player_bundle.active_bundles) == nil, next(player_bundle.active_bundles))
+    check('the log has the gold of the culture of the player',
+        logged.log:find('Faction: ai', 1, true) ~= nil
+        and logged.log:find('culture of the player', 1, true) == nil, logged.log)
 
     local greenskins_off = { bonus_multiplier_wh_main_grn_greenskins = '0' }
 

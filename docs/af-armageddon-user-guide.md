@@ -9,9 +9,9 @@ goes on:
 - experience for the units in their armies;
 - an effect bundle with research, recruitment and growth.
 
-Every AI faction of another culture than yours gets them: alliances, vassals and wars change
-nothing. The AI factions of your own culture and the rebels never get them. In the settings you
-can make the bonuses smaller or bigger for each culture, or turn them off for it.
+Every AI faction gets them, the ones of your own culture too: alliances, vassals and wars change
+nothing. Only you and the rebels never get them. In the settings you can make the bonuses
+smaller or bigger for each culture, or turn them off for it.
 
 ## Installation
 
@@ -52,9 +52,13 @@ revert button next to it. Set it to 2 to get the new default, or keep 1 if you l
 
 ### Your own culture
 
-The AI factions of your culture never get the bonuses, whatever the settings. Its multiplier is
-on the list too, as the main menu doesn't know which culture you'll play, but it changes
-nothing. All other cultures get the bonuses, unless you set their multiplier to 0.
+Your own faction never gets the bonuses. The AI factions of your culture get them like all the
+others, by the multiplier of your culture on the list. Set it to 0 if you don't want them to
+get anything.
+
+Up to version 9.6.0 the AI factions of your culture got no bonuses, whatever its multiplier.
+After the update they get them in a running campaign too, with the multiplier of your culture
+in that campaign, 1 unless you changed it.
 
 ### Bonus multiplier for cultures
 
@@ -129,8 +133,8 @@ it away. Each faction has one bundle at a time, the one of the current turn:
 | 40 | +200 | +10 | +100 |
 
 Research applies to the faction, recruitment and growth to each of its provinces. The bundle
-lasts two turns and is renewed every turn. A faction of your culture or of a culture with the
-multiplier 0 loses it at the start of its next turn.
+lasts two turns and is renewed every turn. A faction of a culture with the multiplier 0 loses it
+at the start of its next turn.
 
 ## Compatibility with other mods
 

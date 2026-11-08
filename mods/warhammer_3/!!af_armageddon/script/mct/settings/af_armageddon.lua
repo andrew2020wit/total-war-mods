@@ -4,13 +4,13 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.6.0'
+local mod_version = '9.7.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
 mct_mod:set_title("AF Armageddon v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
-mct_mod:set_description("Increases difficulty for the middle and late game: AI factions of other cultures than the player's get bonuses that grow over time.")
+mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time.")
 
 mct_mod:add_new_section("gold", "Gold")
 
@@ -125,7 +125,7 @@ for _, culture in ipairs(cultures) do
     local bonus_multiplier = mct_mod:add_new_option("bonus_multiplier_" .. culture, "dropdown")
     -- A loc key of the game: MCT shows the name in the language of the game
     bonus_multiplier:set_text("cultures_name_" .. culture)
-    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change. 0 turns off all the bonuses of this culture, the effect bundle included. The culture of the player gets no bonuses, whatever this value.")
+    bonus_multiplier:set_tooltip_text("The gold and the character experience of the AI factions of this culture are multiplied by this value, the interval of the unit experience is divided by it. The effect bundle doesn't change. 0 turns off all the bonuses of this culture, the effect bundle included. It applies to the AI factions of the player's culture too.")
     bonus_multiplier:add_dropdown_values(bonus_multiplier_values)
     -- Each campaign has its own values: MCT keeps them in the save
     bonus_multiplier:set_is_global(false)
