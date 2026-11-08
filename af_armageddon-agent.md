@@ -111,15 +111,38 @@ defaults from the `settings` table in the script.
 Values are read through `get_finalized_setting()` each time they're needed, and MCT updates
 them as soon as they're saved in its window, so a change applies from the next faction turn.
 
-MCT writes every global option to its settings file with its value, the default ones included
+MCT writes every option to its settings file with its value, the default ones included
 (`Registry:save` of MCT, `this_option.setting = option_obj:get_value_for_save()`, read on
-2026-11-05), and loads that value later. So a new default reaches only the players who never
-had the option saved: `army_experience_turn_interval` became 2 in v9.4.0, and a player who ran
-an older version with MCT keeps 1. MCT shows its revert button next to such a value, and the
-user guide tells the player about it. Don't change a default without that note.
+2026-11-05), and loads that value later. A campaign option also goes into each save with its
+value. So a new default reaches only the players who never had the option saved, and never a
+running campaign: `army_experience_turn_interval` became 2 in v9.4.0, and a player who ran an
+older version with MCT kept 1 until v9.8.0 reset it, see [Campaign options](#campaign-options).
+MCT shows its revert button next to such a value. Don't change a default without a note about
+it in the user guide.
 
-All options but `bonus_multiplier_<culture>` are global (`set_is_global(true)`): one value for
-all campaigns. New options must set it too, unless they belong to a campaign.
+Only `enable_logging` is global (`set_is_global(true)`): one value for all campaigns, as the
+log is for finding problems and doesn't change the game. All the other options belong to a
+campaign (`set_is_global(false)`), the gold and the experience ones since v9.8.0. New options
+must belong to a campaign too, unless they don't change the game, like the log. The tests check
+it.
+
+### Campaign options
+
+MCT keeps the values of campaign options in the save (`Registry:save_game`, the named value
+`mct_registry`), and the script reads them like any other option. A value set in the main menu
+applies to the next new campaign only: MCT takes it from its settings file only when
+`cm:is_new_game()` (`mct_option:load_data`). A campaign saved without an option, for example
+one the mod was added to, has its default, whatever the menu says: `Registry:load_game` sets
+only the options it finds in the save.
+
+Up to v9.7.0 the gold and the experience options were global, and MCT doesn't carry a global
+value over when an option becomes a campaign one (read in `groovy_mct.pack` on 2026-11-08). In
+the main menu `load_data` takes the value of a campaign option from `global_value` of the
+settings file, which a global option never had there, so after the update the menu shows the
+defaults and MCT saves them over the old values. A running campaign has no values of these
+options in its save and gets the defaults too. The player sets them again, in a running
+campaign through its own MCT window; the user guide tells them. The multipliers belonged to a
+campaign before and keep their values.
 
 The checkboxes `skip_bonuses_<culture>` of v9.3.1-v9.4.0 are gone since v9.5.0, and since
 v9.6.0 the multiplier 0 does what a ticked checkbox did. MCT ignores their values in old saves and in its settings file: it looks
@@ -129,8 +152,8 @@ multiplier to 0.
 
 Multiplayer isn't supported, see [What the mod does](#what-the-mod-does). The code only lowers
 the risk of a desync and doesn't make multiplayer a feature: there `get_setting` ignores MCT
-and returns the defaults, as each player has their own values of global options, and "the
-player" of the region count is the first faction of `cm:get_human_factions()`, not the local
+and returns the defaults, as the players could have different values (the sync of campaign
+options by MCT in multiplayer was never checked), and "the player" of the region count is the first faction of `cm:get_human_factions()`, not the local
 one. It's the same faction in single player.
 
 Keep the defaults in the MCT file and in the `settings` table of the script in sync, the
@@ -155,10 +178,8 @@ its option like any other, and it works for the AI factions of that culture.
   `db/cultures_tables` when a DLC adds a culture, and raise the number in the test. The `*` row
   isn't a culture, and `wh3_main_pro_ksl_kislev` of the prologue is left out on purpose: its
   name is the same "Kislev", and the main campaign doesn't have it.
-- These options belong to a campaign (`set_is_global(false)`): MCT keeps them in the save, so
-  the script reads them like any other option. A value set in the main menu applies to the
-  next new campaign only. A campaign saved without them, for example one the mod was added
-  to or one saved before v9.4.0, has the defaults (all multipliers 1), whatever the menu says.
+- These options belong to a campaign, see [Campaign options](#campaign-options). A campaign
+  saved before v9.4.0 has all multipliers 1, whatever the menu says.
 - `set_text` gets the loc key `cultures_name_<culture>` of the game, so the names are in the
   language of the game. A key without text is shown as it is.
 - The section of the cultures is the last one. MCT puts `ceil(n / 2)` sections into the first
@@ -216,7 +237,8 @@ its option like any other, and it works for the AI factions of that culture.
   more got unit experience on the odd turn 51 (interval 1), the two factions of the player's
   culture got nothing, no error. The multiplier 0 and a negative income didn't occur in that
   turn, so only the tests check them. v9.7.0, where the player's culture gets the bonuses,
-  hasn't been run in the game yet.
+  and v9.8.0, where the gold and the experience options belong to a campaign, haven't been run
+  in the game yet: what MCT does with the old global values comes from reading its code.
 
 ## Tests
 
@@ -225,7 +247,8 @@ It covers the unit XP (when it's added and which units and factions get it), the
 XP, the gold (a negative income included), who gets the bonuses (the culture of the player with
 its own multiplier and the multiplier 0 included), the bonus multiplier of the cultures, the effect bundle of
 each turn and the settings: the MCT
-file against the defaults of the script, work without MCT, the log option. It runs the real
+file against the defaults of the script, only the log option global, work without MCT, the log
+option. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the
 MCT options. The local functions of the script aren't reachable, so it checks what they lead
 to: the calls to the game. It doesn't talk to the real game or to the real MCT, so what they

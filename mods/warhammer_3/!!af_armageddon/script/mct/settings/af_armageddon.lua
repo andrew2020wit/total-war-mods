@@ -4,13 +4,16 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.7.0'
+local mod_version = '9.8.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
 mct_mod:set_title("AF Armageddon v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
 mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time.")
+
+-- All the options but the log belong to a campaign (set_is_global(false)): MCT keeps them in the
+-- save, and a value set in the main menu applies to the next new campaign only
 
 mct_mod:add_new_section("gold", "Gold")
 
@@ -20,7 +23,7 @@ regions_percent:set_tooltip_text("Each region of the player adds this percent of
 regions_percent:slider_set_min_max(0, 100)
 regions_percent:slider_set_step_size(1)
 regions_percent:set_default_value(4)
-regions_percent:set_is_global(true)
+regions_percent:set_is_global(false)
 
 local time_percent = mct_mod:add_new_option("time_percent", "slider")
 time_percent:set_text("Percent of income per turn")
@@ -28,7 +31,7 @@ time_percent:set_tooltip_text("Each turn of the campaign adds this percent of th
 time_percent:slider_set_min_max(0, 100)
 time_percent:slider_set_step_size(1)
 time_percent:set_default_value(2)
-time_percent:set_is_global(true)
+time_percent:set_is_global(false)
 
 mct_mod:add_new_section("character_experience", "Character experience")
 
@@ -38,7 +41,7 @@ experience_for_character:set_tooltip_text("Each character of the AI faction gets
 experience_for_character:slider_set_min_max(0, 5000)
 experience_for_character:slider_set_step_size(50)
 experience_for_character:set_default_value(200)
-experience_for_character:set_is_global(true)
+experience_for_character:set_is_global(false)
 
 local character_start_turn = mct_mod:add_new_option("character_experience_start_turn", "slider")
 character_start_turn:set_text("Start turn")
@@ -46,7 +49,7 @@ character_start_turn:set_tooltip_text("Characters get experience from this turn 
 character_start_turn:slider_set_min_max(1, 200)
 character_start_turn:slider_set_step_size(1)
 character_start_turn:set_default_value(10)
-character_start_turn:set_is_global(true)
+character_start_turn:set_is_global(false)
 
 mct_mod:add_new_section("army_experience", "Unit experience")
 
@@ -56,7 +59,7 @@ army_start_turn:set_tooltip_text("Units in armies with a general get experience 
 army_start_turn:slider_set_min_max(1, 200)
 army_start_turn:slider_set_step_size(1)
 army_start_turn:set_default_value(10)
-army_start_turn:set_is_global(true)
+army_start_turn:set_is_global(false)
 
 local army_turn_interval = mct_mod:add_new_option("army_experience_turn_interval", "slider")
 army_turn_interval:set_text("Every n-th turn")
@@ -64,7 +67,7 @@ army_turn_interval:set_tooltip_text("1 - every turn, 3 - only turns divisible by
 army_turn_interval:slider_set_min_max(1, 50)
 army_turn_interval:slider_set_step_size(1)
 army_turn_interval:set_default_value(2)
-army_turn_interval:set_is_global(true)
+army_turn_interval:set_is_global(false)
 
 mct_mod:add_new_section("debug", "Debug")
 
@@ -72,6 +75,7 @@ local logging = mct_mod:add_new_option("enable_logging", "checkbox")
 logging:set_text("Write a log file")
 logging:set_tooltip_text("Writes !!af_armageddon.txt to the game folder.")
 logging:set_default_value(false)
+-- The only global option: the log is for finding problems, not a part of a campaign
 logging:set_is_global(true)
 
 -- The last section: MCT puts ceil(n / 2) sections into the first column, so this long list gets

@@ -43,12 +43,18 @@ the right one the log and the bonus multipliers of the cultures.
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
 | Bonus multiplier for cultures | One list for each culture | 1 | 0 to 5: makes the gold and the experience of this culture smaller or bigger, 0 turns its bonuses off |
 
-The settings are the same for all your campaigns, except the bonus multipliers. A change takes
-effect from the next turn of an AI faction.
+Each campaign has its own settings, except **Write a log file**, which is the same everywhere.
+A change made in a campaign applies to that campaign only, from the next turn of an AI faction.
+In the main menu it applies to the next campaign you start, not to the ones already running. If
+you add the mod to a running campaign, it has the default settings until you change them there.
 
-MCT remembers the values it has saved, even the default ones. If you played a version older
-than 9.4.0 with MCT, **Every n-th turn** may still be 1, the old default: MCT then shows the
-revert button next to it. Set it to 2 to get the new default, or keep 1 if you like it.
+### After the update to 9.8.0
+
+Up to version 9.7.0 the gold and the experience settings were the same for all your campaigns.
+MCT doesn't carry them over: after the update they're back to their defaults, in the main menu
+and in your running campaigns too. If you had changed them, set them again: in the main menu for
+new campaigns, and in each running campaign in its own MCT window. The bonus multipliers and
+**Write a log file** keep their values.
 
 ### Your own culture
 
@@ -81,10 +87,9 @@ The effect bundle stays the same, and so do the start turns. To weaken a culture
 possible but still let it grow, give it 0.1. To leave it as it is in the game, for example your
 allies, give it 0: its factions lose their effect bundle on their next turn.
 
-Each campaign has its own multipliers. A change made in a campaign applies to that campaign
-only. In the main menu it applies to the next campaign you start, not to the ones already
-running. If you add the mod to a running campaign, every culture has 1 until you change it
-there. Cultures from other mods aren't on the list, so they always have 1.
+Like the other settings, each campaign has its own multipliers, see [Settings](#settings). If
+you add the mod to a running campaign, every culture has 1 until you change it there. Cultures
+from other mods aren't on the list, so they always have 1.
 
 ## What the AI gets
 

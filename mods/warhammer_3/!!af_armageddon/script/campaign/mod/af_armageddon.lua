@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.7.0'
+local mod_version = '9.8.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -34,7 +34,7 @@ local effect_bundles_turns = { 40 , 35, 30, 20, 10 }
 local settings_logged_turn = 0
 
 local function get_mct_mod()
-    -- Each player has own values of global options, and different values would be a desync
+    -- Multiplayer isn't supported: the players could have different values there, a desync
     if not get_mct or cm:is_multiplayer() then
         return nil
     end

@@ -592,7 +592,10 @@ do
         check('an MCT option for ' .. key, option ~= nil)
         if option then
             check(key .. ': the same default', option.default == value, option.default)
-            check(key .. ': global', option.is_global == true)
+            -- Only the log is global, all the other options belong to a campaign
+            local is_global = key == 'enable_logging'
+            check(key .. (is_global and ': global' or ': for each campaign'),
+                option.is_global == is_global, option.is_global)
             if option.type == 'slider' then
                 check(key .. ': the default fits the slider',
                     value >= option.min and value <= option.max and value % option.step == 0, value)
