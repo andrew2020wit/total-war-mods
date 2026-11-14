@@ -25,13 +25,14 @@ local function list(items)
     return { num_items = function() return #items end, item_at = function(_, i) return items[i + 1] end }
 end
 
--- Runs the MCT file and returns its options by key, with its title.
+-- Runs the MCT file and returns its options by key, with its title and the keys of its sections in order.
 local function read_mct_options()
     local mct_source = read_file(mct_path)
     assert(mct_source ~= '', 'run it from the repository root')
 
     local options = {}
     local title
+    local sections = {}
     local option_methods = {
         set_text = function(self, text) self.text = text end,
         set_tooltip_text = function() end,
@@ -52,7 +53,7 @@ local function read_mct_options()
         set_title = function(_, text) title = text end,
         set_author = function() end,
         set_description = function() end,
-        add_new_section = function() end,
+        add_new_section = function(_, key) sections[#sections + 1] = key end,
         add_new_option = function(_, key, option_type)
             local option = setmetatable({ type = option_type }, { __index = option_methods })
             options[key] = option
@@ -67,10 +68,10 @@ local function read_mct_options()
 
     assert(load(mct_source, 'af_armageddon_mct', 't', env))()
 
-    return options, title
+    return options, title, sections
 end
 
-local mct_options, mct_title = read_mct_options()
+local mct_options, mct_title, mct_sections = read_mct_options()
 
 -- The defaults are a local table of the script, so they're read from its text.
 local function read_script_defaults()
@@ -97,6 +98,10 @@ end
 -- Returns what the AI got: xp_turns (one entry per unit), character_xp (turn:amount), gold_count,
 -- last_gold, bundles (key by turn) and active_bundles, plus the log file in log, and in rank_reads
 -- how many times the rank of a unit was read.
+-- Each turn the player and the other human player start it, then the AI. What the humans got: penalties
+-- (the value of the diplomacy effect by turn, for the player), and the custom bundles on them in
+-- player_bundles and other_bundles (key -> { effects, duration }), stacked if a bundle was applied over
+-- itself.
 local function play(world)
     local log_name = file_prefix .. 'log.txt'
     os.remove(log_name)
@@ -109,6 +114,9 @@ local function play(world)
     local last_gold = 0
     local bundles, active_bundles = {}, {}
     for _, key in ipairs(world.bundles_before or {}) do active_bundles[key] = true end
+    local penalties = {}
+    local human_bundles = { player = {}, other = {} }
+    local stacked = false
     local rank_reads = 0
     local first_tick
     local env = setmetatable({}, { __index = _G })
@@ -185,7 +193,11 @@ local function play(world)
         has_effect_bundle = function(_, key) return active_bundles[key] == true end
     }
     local player = {
+        name = function() return 'player' end,
+        is_rebel = function() return false end,
+        is_human = function() return true end,
         culture = function() return world.player_culture or 'wh_main_emp_empire' end,
+        has_effect_bundle = function(_, key) return human_bundles.player[key] ~= nil end,
         region_list = function()
             local regions = {}
             for i = 1, world.player_regions or 0 do regions[i] = {} end
@@ -194,7 +206,11 @@ local function play(world)
     }
 
     local other_player = {
+        name = function() return 'other' end,
+        is_rebel = function() return false end,
+        is_human = function() return true end,
         culture = function() return world.other_culture or 'wh_main_dwf_dwarfs' end,
+        has_effect_bundle = function(_, key) return human_bundles.other[key] ~= nil end,
         region_list = function() return list({ {}, {}, {} }) end
     }
 
@@ -216,7 +232,31 @@ local function play(world)
             bundles[turn] = key
             active_bundles[key] = true
         end,
-        remove_effect_bundle = function(_, key) active_bundles[key] = nil end,
+        remove_effect_bundle = function(_, key, faction_name)
+            if human_bundles[faction_name] then
+                human_bundles[faction_name][key] = nil
+            else
+                assert(faction_name == 'ai', faction_name)
+                active_bundles[key] = nil
+            end
+        end,
+        create_new_custom_effect_bundle = function(_, key)
+            local custom = { key = key, effects = {} }
+            return {
+                data = custom,
+                add_effect = function(_, effect, scope, value)
+                    custom.effects[#custom.effects + 1] = { effect = effect, scope = scope, value = value }
+                end,
+                set_duration = function(_, duration) custom.duration = duration end
+            }
+        end,
+        apply_custom_effect_bundle_to_faction = function(_, bundle, faction)
+            local on_faction = assert(human_bundles[faction:name()], 'a custom bundle on ' .. faction:name())
+            local custom = bundle.data
+            if on_faction[custom.key] then stacked = true end
+            on_faction[custom.key] = custom
+            if faction:name() == 'player' and #custom.effects == 1 then penalties[turn] = custom.effects[1].value end
+        end,
         add_experience_to_unit = function() xp_turns[#xp_turns + 1] = turn end,
         char_lookup_str = function() return 'character_lookup' end,
         add_agent_experience = function(_, _, amount)
@@ -238,6 +278,8 @@ local function play(world)
         for key, value in pairs(world.changes and world.changes[current] or {}) do
             overrides[key] = value
         end
+        turn_listener({ faction = function() return player end })
+        turn_listener({ faction = function() return other_player end })
         for _ = 1, world.faction_turns or 1 do
             turn_listener({ faction = function() return ai end })
         end
@@ -250,6 +292,10 @@ local function play(world)
         last_gold = last_gold,
         bundles = bundles,
         active_bundles = active_bundles,
+        penalties = penalties,
+        player_bundles = human_bundles.player,
+        other_bundles = human_bundles.other,
+        stacked = stacked,
         rank_reads = rank_reads,
         log = read_file(log_name)
     }
@@ -582,9 +628,118 @@ do
         logged.log:find('add_xp_to_army, faction: ai, every n-th turn: 4', 1, true) ~= nil, logged.log)
 end
 
+print('-- attitude to the player')
+
+do
+    local bundle_key = 'af_armageddon_effect_bundle_diplomacy_penalty'
+
+    -- The penalties of the player by turn, 'none' for a turn without the bundle
+    local function penalty_turns(world, turns)
+        local result = play(world)
+        local values = {}
+        for _, turn in ipairs(turns) do values[#values + 1] = tostring(result.penalties[turn] or 'none') end
+        return table.concat(values, ','), result
+    end
+
+    local function check_penalties(name, world, turns, expected)
+        local values = penalty_turns(world, turns)
+        check(name, values == expected, values)
+    end
+
+    -- Each turn the bundle is applied again: the value of a turn is the one it was applied with
+    check_penalties('by default: 5 per 10 turns from turn 20, up to 60', { last_turn = 150 },
+        { 1, 19, 20, 21, 22, 23, 40, 100, 138, 139, 150 },
+        'none,none,none,-1,-1,-2,-10,-40,-59,-60,-60')
+
+    do
+        local _, result = penalty_turns({ last_turn = 150 }, {})
+        local bundle = result.player_bundles[bundle_key]
+        local effect = bundle and bundle.effects[1]
+        check('the bundle has one effect: the vanilla relations with all factions',
+            bundle ~= nil and #bundle.effects == 1 and effect.effect == 'wh_main_faction_political_diplomacy_mod'
+            and effect.scope == 'faction_to_faction_own_unseen' and effect.value == -60,
+            effect and (effect.effect .. ' ' .. effect.scope .. ' ' .. effect.value))
+        check('the bundle has no end', bundle ~= nil and bundle.duration == 0, bundle and bundle.duration)
+        check('the old bundle is removed before the new one', result.stacked == false)
+        check('the other human player gets no bundle', next(result.other_bundles) == nil)
+        check('the AI gets no bundle of the player', result.active_bundles[bundle_key] == nil)
+        check('the player gets no gold', result.gold_count == 150, result.gold_count)
+    end
+
+    check_penalties('the penalty comes from MCT', {
+        settings = { diplomacy_penalty_per_10_turns = 10 },
+        last_turn = 25
+    }, { 19, 20, 21, 25 }, 'none,-1,-2,-6')
+
+    check_penalties('the start turn comes from MCT', {
+        settings = { diplomacy_penalty_start_turn = 5, diplomacy_penalty_per_10_turns = 10 },
+        last_turn = 14
+    }, { 4, 5, 14 }, 'none,-1,-10')
+
+    check_penalties('the maximum comes from MCT', {
+        settings = { diplomacy_penalty_max = 5 },
+        last_turn = 100
+    }, { 29, 30, 100 }, '-5,-5,-5')
+
+    check_penalties('50 per 10 turns: 5 per turn', {
+        settings = { diplomacy_penalty_per_10_turns = 50, diplomacy_penalty_max = 200 },
+        last_turn = 70
+    }, { 20, 21, 59, 60, 70 }, '-5,-10,-200,-200,-200')
+
+    do
+        local values, result = penalty_turns({ settings = { diplomacy_penalty_per_10_turns = 0 }, last_turn = 150 }, { 150 })
+        check('0 turns it off', values == 'none' and next(result.player_bundles) == nil, values)
+    end
+
+    do
+        local values, result = penalty_turns({
+            changes = { [41] = { diplomacy_penalty_per_10_turns = 0 } },
+            last_turn = 42
+        }, { 40, 41, 42 })
+        check('0 during the campaign removes the bundle on the next turn of the player',
+            values == '-10,none,none' and next(result.player_bundles) == nil, values)
+    end
+
+    check_penalties('a lower maximum during the campaign lowers the penalty', {
+        changes = { [41] = { diplomacy_penalty_max = 5 } },
+        last_turn = 41
+    }, { 40, 41 }, '-10,-5')
+
+    check_penalties('a later start turn during the campaign takes the penalty back', {
+        changes = { [41] = { diplomacy_penalty_start_turn = 100 } },
+        last_turn = 42
+    }, { 40, 41, 42 }, '-10,none,none')
+
+    check_penalties('the multipliers of the cultures change nothing', {
+        settings = { bonus_multiplier_wh_main_emp_empire = '0', bonus_multiplier_wh_main_grn_greenskins = '5' },
+        last_turn = 40
+    }, { 40 }, '-10')
+
+    check_penalties('without MCT: the defaults', { no_mct = true, last_turn = 40 }, { 40 }, '-10')
+
+    do
+        local values, result = penalty_turns({
+            is_mp = true,
+            other_is_local = true,
+            settings = { diplomacy_penalty_per_10_turns = 50 },
+            last_turn = 40
+        }, { 40 })
+        check('multiplayer: the defaults, only for the first player',
+            values == '-10' and next(result.other_bundles) == nil, values)
+    end
+
+    local logged = play({ settings = { enable_logging = true }, last_turn = 40 })
+    check('the log has the penalty',
+        logged.log:find('diplomacy penalty, faction: player, penalty: 10', 1, true) ~= nil, logged.log)
+end
+
 print('-- settings')
 
 do
+    check('the sections: three in each column, the cultures last',
+        table.concat(mct_sections, ',') == 'gold,character_experience,army_experience,diplomacy,debug,bonus_multiplier',
+        table.concat(mct_sections, ','))
+
     local defaults = read_script_defaults()
 
     for key, value in pairs(defaults) do

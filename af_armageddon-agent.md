@@ -43,6 +43,26 @@ Bonuses applied per eligible AI faction turn:
   (see `effect_bundles_turns`); older bundles are removed first so only one is active. The
   bonus multiplier doesn't change it.
 
+On the player's own `FactionTurnStart` (the first faction of `cm:get_human_factions()`, see
+[Campaign options](#campaign-options) about multiplayer) the same listener gives no bonuses but
+renews the **attitude penalty** since v9.9.0: all the factions like the player less and less.
+- It's the custom effect bundle `af_armageddon_effect_bundle_diplomacy_penalty` on the player's
+  faction with one effect, the vanilla `wh_main_faction_political_diplomacy_mod` ("Diplomatic
+  relations with all factions", scope `faction_to_faction_own_unseen`) at minus the penalty, no
+  end (`set_duration(0)`). The vanilla Sword of Khaine bundles `wh2_sword_of_khaine_1..3` have
+  this effect at -10/-20/-40, the imperium bundles have their own effect at -5 to -60. The
+  effect works through `effect_bonus_value_subculture_junctions` (`diplomatic_mod`), one row for
+  each of the 29 vanilla subcultures, so a culture of another mod doesn't feel it unless that
+  mod adds its own row.
+- The penalty is `min(max, floor((turn - start_turn + 1) * per_10_turns / 10))` from
+  `diplomacy_penalty_start_turn` on, 0 before it. It's computed from the turn, not added up, so
+  nothing goes into the save and a change of the settings applies both ways on the next turn of
+  the player. The old bundle is removed and the new one applied each turn, like Kislev does with
+  its supporters (`apply_kislev_support_effect`); 0 only removes it.
+- The bonus multipliers don't change it: the effect is one value for all the factions, allies,
+  vassals and the player's culture included. Per culture it would take own effects in the pack,
+  one per culture with its subcultures in `effect_bonus_value_subculture_junctions`.
+
 The **bonus multiplier** is the `bonus_multiplier_<culture>` option, 0 to 5, by default 1. A
 culture without that option (another mod's, or no MCT, or multiplayer) gets 1, and so does a
 value that isn't a number or is below 0. 0 turns off all the bonuses of the culture, the effect
@@ -90,6 +110,14 @@ turn 40+ — see `effect_bundles_turns` in the script for the turn thresholds):
 (Read out via the RPFM MCP server on 2026-11-01; re-verify from the `.pack` if it's been
 edited since.)
 
+Since v9.9.0 `db/effect_bundles_tables/` has a sixth row, `af_armageddon_effect_bundle_diplomacy_penalty`
+(`bundle_target: faction`, `priority: 1`, `ui_icon: diplomacy.png`, `is_global_effect: true`,
+`owner_only: true`), with no rows in the junctions table: it's only the base of the custom
+bundle, the script adds the effect. The player sees this bundle, so the pack has its first loc
+file, `text/db/af_armageddon.loc`, also only in the pack: the English title and description
+under `effect_bundles_localised_title_` / `effect_bundles_localised_description_` + the key,
+for all languages. The `ai_buff` bundles have no loc: they're never on the player's faction.
+
 ## Settings
 
 The settings window is provided by
@@ -105,6 +133,9 @@ defaults from the `settings` table in the script.
 | `character_experience_start_turn` | slider   | `10`    | First turn of character XP, 1-200           |
 | `army_experience_start_turn`      | slider   | `10`    | First turn of unit XP, 1-200                |
 | `army_experience_turn_interval`   | slider   | `2`     | Unit XP on every n-th turn, 1-50, before the bonus multiplier |
+| `diplomacy_penalty_per_10_turns`  | slider   | `5`     | Attitude penalty growth per 10 turns, 0-50, 0 is off |
+| `diplomacy_penalty_start_turn`    | slider   | `20`    | First turn the penalty grows, 1-200          |
+| `diplomacy_penalty_max`           | slider   | `60`    | Cap of the penalty, 5-200 in steps of 5      |
 | `enable_logging`                  | checkbox | `false` | Writes `!!af_armageddon.txt`                |
 | `bonus_multiplier_<culture>`      | dropdown | `'1'`   | `'0'` (off), `'0.1'`, `'0.25'` to `'2'` in steps of 0.25, `'3'`, `'4'`, `'5'`; one per culture, see [What the mod does](#what-the-mod-does) |
 
@@ -184,10 +215,12 @@ its option like any other, and it works for the AI factions of that culture.
   language of the game. A key without text is shown as it is.
 - The section of the cultures is the last one. MCT puts `ceil(n / 2)` sections into the first
   column and the rest into the second, whatever their height (`Settings.lua` of MCT), and the
-  columns scroll. With five sections the first column has Gold and both experiences, the
-  second has Debug and the long list of the cultures, so the other settings stay in view. A new
-  section would break that split. MCT adds its own `default` section only when an option comes
-  before any section, which isn't the case here.
+  columns scroll. With six sections since v9.9.0 the first column has Gold and both
+  experiences, the second has the attitude to the player, Debug and the long list of the
+  cultures, so the other settings stay in view. The attitude section must stay fourth, and a
+  seventh section would break the split: the first column would get four. The tests check the
+  order. MCT adds its own `default` section only when an option comes before any section, which
+  isn't the case here.
 
 ## Toolchain
 
@@ -224,9 +257,11 @@ its option like any other, and it works for the AI factions of that culture.
   of a unit changes at once. 454 of those lines were generic lords and heralds at level 0, while
   nearly all the others were at level 6 and above. The log of one turn can't say why, it may be
   garrison commanders: compare the characters over several turns before drawing conclusions.
-- This mod only acts on AI factions (`is_human()` and `is_rebel()` factions are skipped
+- The bonuses go only to AI factions (`is_human()` and `is_rebel()` factions are skipped
   early in `help_ai_each_turn`, and then the factions of the cultures with the multiplier 0,
-  which also lose their effect bundle). The player's culture isn't checked since v9.7.0.
+  which also lose their effect bundle). The player's culture isn't checked since v9.7.0. The
+  only thing on the player's faction is the attitude penalty bundle, renewed in the same
+  `is_human()` branch.
 - Lua numbers in the game are single-precision floats: the log of 2026-11-05 shows the
   multiplier `'0.1'` as `0.10000000149012`. The rounded interval and character experience still
   come out whole (`2 / 0.1` rounds to 20), but don't compare such results with `==`, and
@@ -239,6 +274,11 @@ its option like any other, and it works for the AI factions of that culture.
   turn, so only the tests check them. v9.7.0, where the player's culture gets the bonuses,
   and v9.8.0, where the gold and the experience options belong to a campaign, haven't been run
   in the game yet: what MCT does with the old global values comes from reading its code.
+- v9.9.0, the attitude penalty, hasn't been run in the game either. The API calls and the DB
+  rows follow the vanilla scripts and tables read on 2026-11-14 (Kislev's supporters, the
+  College of Magic, Oxyotl's diplomacy reward, the Sword of Khaine), but the game still has to
+  show where the penalty appears in the diplomacy breakdown, that removing and applying the
+  bundle each turn leaves one bundle, and how the AI reacts to the default values.
 
 ## Tests
 
@@ -246,9 +286,11 @@ its option like any other, and it works for the AI factions of that culture.
 It covers the unit XP (when it's added and which units and factions get it), the character
 XP, the gold (a negative income included), who gets the bonuses (the culture of the player with
 its own multiplier and the multiplier 0 included), the bonus multiplier of the cultures, the effect bundle of
-each turn and the settings: the MCT
-file against the defaults of the script, only the log option global, work without MCT, the log
-option. It runs the real
+each turn, the attitude penalty (its value by turn, the bundle and its effect, changes of its
+settings during a campaign, only the first human faction) and the settings: the MCT
+file against the defaults of the script, only the log option global, the order of the sections,
+work without MCT, the log option. Each turn of the model the player and the other human player
+start it, then the AI. It runs the real
 script against a small model of the game, MCT included, and changes the settings through the
 MCT options. The local functions of the script aren't reachable, so it checks what they lead
 to: the calls to the game. It doesn't talk to the real game or to the real MCT, so what they

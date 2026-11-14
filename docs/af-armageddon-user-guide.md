@@ -13,6 +13,9 @@ Every AI faction gets them, the ones of your own culture too: alliances, vassals
 nothing. Only you and the rebels never get them. In the settings you can make the bonuses
 smaller or bigger for each culture, or turn them off for it.
 
+As the campaign goes on, all the factions also like you less and less, see
+[Attitude to you](#attitude-to-you).
+
 ## Installation
 
 1. Subscribe to [AF Armageddon](https://steamcommunity.com/sharedfiles/filedetails/?id=3665832094).
@@ -30,7 +33,8 @@ You can add the mod to a running campaign. Don't remove it afterwards, see
 
 Open the Mod Configuration Tool window in the game and choose **AF Armageddon**, then **Settings**.
 The version of the mod is shown in its title. The left column holds the gold and the experience,
-the right one the log and the bonus multipliers of the cultures.
+the right one the attitude to you, the log and the bonus multipliers of the cultures. The
+screenshot is of an older version, without the attitude.
 
 | Section | Option | Default | What it does |
 |---|---|---:|---|
@@ -40,6 +44,9 @@ the right one the log and the bonus multipliers of the cultures.
 | Character experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Start turn | 10 | The first turn with this bonus, 1-200 |
 | Unit experience | Every n-th turn | 2 | How often a unit gets a whole extra rank: 1 is every turn, 3 is only the turns divisible by 3, up to 50. Divided by the bonus multiplier of the culture |
+| Attitude to the player | Penalty per 10 turns | 5 | How much less all the factions like you every 10 turns, 0-50. 0 turns it off |
+| Attitude to the player | Start turn | 20 | The penalty starts growing on this turn, 1-200 |
+| Attitude to the player | Maximum penalty | 60 | The penalty stops growing here, 5-200 |
 | Debug | Write a log file | Off | Writes a log, useful for finding problems |
 | Bonus multiplier for cultures | One list for each culture | 1 | 0 to 5: makes the gold and the experience of this culture smaller or bigger, 0 turns its bonuses off |
 
@@ -83,7 +90,8 @@ bundle included. Any other value changes:
   turn, 0.5 every 4th turn, 0.75 every 3rd turn, 1 and 1.25 every 2nd turn, 1.5 and more every
   turn.
 
-The effect bundle stays the same, and so do the start turns. To weaken a culture as much as
+The effect bundle stays the same, and so do the start turns. The multipliers don't change the
+[attitude to you](#attitude-to-you) either, not even 0. To weaken a culture as much as
 possible but still let it grow, give it 0.1. To leave it as it is in the game, for example your
 allies, give it 0: its factions lose their effect bundle on their next turn.
 
@@ -141,6 +149,31 @@ Research applies to the faction, recruitment and growth to each of its provinces
 lasts two turns and is renewed every turn. A faction of a culture with the multiplier 0 loses it
 at the start of its next turn.
 
+## Attitude to you
+
+From the start turn on, all the factions like you less and less. Your faction gets the effect
+bundle **Armageddon: growing distrust** with the game's own effect "Diplomatic relations with all
+factions", the one the Sword of Khaine has at -10 to -40. The rest of the diplomacy stays as it
+is: the AI decides by itself what to do with its worse attitude, for example declares war on you
+sooner or refuses a treaty.
+
+```
+penalty = (turn - start turn + 1) × penalty per 10 turns / 10, rounded down, up to the maximum
+```
+
+With the default settings that's -1 on turn 21, -10 on turn 40, -40 on turn 100, and -60, the
+maximum, from turn 139 on. The game gives the biggest empires -60 of its own, and the two add up.
+
+- It applies to every faction, your allies, your vassals and the factions of your own culture
+  included. The bonus multipliers of the cultures don't change it, not even 0.
+- The factions of cultures from other mods don't get it, unless their mod links its culture to
+  this effect of the game.
+- The bundle is renewed at the start of each of your turns, so a change of the settings applies
+  from your next turn, both ways: a smaller penalty or maximum makes the attitude better again,
+  and **Penalty per 10 turns** 0 takes the bundle away. The wars already declared stay.
+- If you add the mod to a running campaign after the start turn, you get the penalty of the
+  current turn at once.
+
 ## Compatibility with other mods
 
 AF Armageddon was made to be used with **Radious**, and it's compatible with any other mod.
@@ -158,6 +191,9 @@ you can expect is that the difficulty gradually grows.
 If it's too hard, lower the two gold percents, move the start turns later or lower the
 multipliers of the strongest cultures, down to 0. If it's too easy, raise the percents, move
 the start turns earlier or raise the multipliers, up to 5.
+
+If the whole world turns against you too soon, lower the penalty per 10 turns or its maximum, or
+move its start turn later. If you want more wars, raise them.
 
 ## Good to know
 

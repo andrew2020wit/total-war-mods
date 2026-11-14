@@ -1,7 +1,7 @@
 -- AF Armageddon, "Total War Warhammer 3" modification
 -- af_armageddon
 
-local mod_version = '9.8.0'
+local mod_version = '9.9.0'
 
 local mct_mod_key = 'af_armageddon'
 
@@ -14,7 +14,11 @@ local settings = {
     character_experience_start_turn = 10,
     army_experience_start_turn = 10,
     -- 1 - every turn, 3 - only turns divisible by 3 (3, 6, 9 ...), before the bonus multiplier
-    army_experience_turn_interval = 2
+    army_experience_turn_interval = 2,
+    -- How much worse the attitude of all the factions to the player gets in 10 turns, 0 turns it off
+    diplomacy_penalty_per_10_turns = 5,
+    diplomacy_penalty_start_turn = 20,
+    diplomacy_penalty_max = 60
 }
 
 -- A culture without an option, from another mod or without MCT, gets the bonuses as they are
@@ -30,6 +34,12 @@ local effect_bundles = {
 
 -- 40 day - apply_effect_bundle bundle_ai_buff_5
 local effect_bundles_turns = { 40 , 35, 30, 20, 10 }
+
+-- On the faction of the player, an empty bundle of the pack: the script adds the effect with its value
+local diplomacy_penalty_bundle = "af_armageddon_effect_bundle_diplomacy_penalty"
+-- The vanilla "Diplomatic relations with all factions", the Sword of Khaine has it at -10 to -40
+local diplomacy_penalty_effect = "wh_main_faction_political_diplomacy_mod"
+local diplomacy_penalty_effect_scope = "faction_to_faction_own_unseen"
 
 local settings_logged_turn = 0
 
@@ -247,6 +257,45 @@ local function add_xp_to_characters(faction_name, bonus_multiplier)
     end
 end
 
+-- From the turn, not added up turn by turn: a change of the settings applies both ways, nothing is saved
+local function get_diplomacy_penalty(turn)
+    local start_turn = get_setting('diplomacy_penalty_start_turn')
+
+    if turn < start_turn then
+        return 0
+    end
+
+    -- The start turn counts: 5 per 10 turns is 0.5 on it, rounded down to 0
+    local penalty = math.floor((turn - start_turn + 1) * get_setting('diplomacy_penalty_per_10_turns') / 10)
+
+    return math.max(0, math.min(get_setting('diplomacy_penalty_max'), penalty))
+end
+
+-- On each turn of the player, like Kislev does with its supporters: the old bundle goes, the new one has the
+-- penalty of this turn. The culture multipliers don't change it: the effect is one for all the factions
+local function update_diplomacy_penalty(faction)
+    local faction_name = faction:name()
+    local penalty = get_diplomacy_penalty(cm:turn_number())
+
+    log('diplomacy penalty, faction: ' .. faction_name .. ', penalty: ' .. tostring(penalty))
+
+    if faction:has_effect_bundle(diplomacy_penalty_bundle) then
+        cm:remove_effect_bundle(diplomacy_penalty_bundle, faction_name)
+    end
+
+    if penalty == 0 then
+        return
+    end
+
+    local bundle = cm:create_new_custom_effect_bundle(diplomacy_penalty_bundle)
+
+    bundle:add_effect(diplomacy_penalty_effect, diplomacy_penalty_effect_scope, -penalty)
+    -- 0: no end, it's replaced on the next turn of the player
+    bundle:set_duration(0)
+
+    cm:apply_custom_effect_bundle_to_faction(bundle, faction)
+end
+
 local function help_ai_each_turn(context)
     log_settings()
 
@@ -259,6 +308,11 @@ local function help_ai_each_turn(context)
     end
 
     if current_faction:is_human() then
+        -- The rules know one player, like the region count of the gold
+        if current_faction_name == cm:get_human_factions()[1] then
+            update_diplomacy_penalty(current_faction)
+        end
+
         return
     end
 

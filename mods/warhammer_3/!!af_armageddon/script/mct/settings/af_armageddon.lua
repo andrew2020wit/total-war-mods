@@ -4,13 +4,13 @@ if not get_mct then
     return
 end
 
-local mod_version = '9.8.0'
+local mod_version = '9.9.0'
 
 local mct_mod = get_mct():register_mod("af_armageddon")
 
 mct_mod:set_title("AF Armageddon v" .. mod_version)
 mct_mod:set_author("Andrew Faurash")
-mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time.")
+mct_mod:set_description("Increases difficulty for the middle and late game: AI factions get bonuses that grow over time, and all the factions like the player less and less.")
 
 -- All the options but the log belong to a campaign (set_is_global(false)): MCT keeps them in the
 -- save, and a value set in the main menu applies to the next new campaign only
@@ -68,6 +68,33 @@ army_turn_interval:slider_set_min_max(1, 50)
 army_turn_interval:slider_set_step_size(1)
 army_turn_interval:set_default_value(2)
 army_turn_interval:set_is_global(false)
+
+-- The fourth of six sections: MCT puts three into the first column, so this one opens the second
+mct_mod:add_new_section("diplomacy", "Attitude to the player")
+
+local diplomacy_penalty = mct_mod:add_new_option("diplomacy_penalty_per_10_turns", "slider")
+diplomacy_penalty:set_text("Penalty per 10 turns")
+diplomacy_penalty:set_tooltip_text("All the factions like the player this much less every 10 turns, from the start turn on. 0 turns it off. The multipliers of the cultures don't change it.")
+diplomacy_penalty:slider_set_min_max(0, 50)
+diplomacy_penalty:slider_set_step_size(1)
+diplomacy_penalty:set_default_value(5)
+diplomacy_penalty:set_is_global(false)
+
+local diplomacy_start_turn = mct_mod:add_new_option("diplomacy_penalty_start_turn", "slider")
+diplomacy_start_turn:set_text("Start turn")
+diplomacy_start_turn:set_tooltip_text("The attitude to the player starts getting worse on this turn.")
+diplomacy_start_turn:slider_set_min_max(1, 200)
+diplomacy_start_turn:slider_set_step_size(1)
+diplomacy_start_turn:set_default_value(20)
+diplomacy_start_turn:set_is_global(false)
+
+local diplomacy_max = mct_mod:add_new_option("diplomacy_penalty_max", "slider")
+diplomacy_max:set_text("Maximum penalty")
+diplomacy_max:set_tooltip_text("The penalty stops growing here. For comparison, the Sword of Khaine gives up to 40, the biggest empire 60.")
+diplomacy_max:slider_set_min_max(5, 200)
+diplomacy_max:slider_set_step_size(5)
+diplomacy_max:set_default_value(60)
+diplomacy_max:set_is_global(false)
 
 mct_mod:add_new_section("debug", "Debug")
 
